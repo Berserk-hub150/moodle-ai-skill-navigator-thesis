@@ -30,6 +30,7 @@
     volumes:
       - moodle_data:/bitnami/moodle
       - moodledata_data:/bitnami/moodledata
+      - ./moodle/blocks/aitutor:/bitnami/moodle/blocks/aitutor
     depends_on:
       - mariadb
 

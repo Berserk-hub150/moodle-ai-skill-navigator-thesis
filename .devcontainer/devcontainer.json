@@ -1,0 +1,19 @@
+﻿{
+  "name": "Tesi Moodle AI",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "forwardPorts": [8080, 8443],
+  "portsAttributes": {
+    "8080": {
+      "label": "Moodle",
+      "onAutoForward": "notify"
+    },
+    "8443": {
+      "label": "Moodle HTTPS",
+      "onAutoForward": "ignore"
+    }
+  },
+  "postCreateCommand": "docker --version && docker compose version"
+}
