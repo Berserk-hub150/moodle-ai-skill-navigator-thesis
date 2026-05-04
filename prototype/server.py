@@ -1,7 +1,4 @@
 import json
-import os
-import urllib.request
-import urllib.error
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 
@@ -9,82 +6,43 @@ HOST = "0.0.0.0"
 PORT = 8000
 
 
-def build_prompt(action, lesson_title, lesson_text):
-    actions = {
-        "summary": "Riassumi il contenuto in modo chiaro e sintetico.",
-        "simple": "Spiega il contenuto in modo semplice, adatto a uno studente principiante.",
-        "questions": "Genera 5 domande di autovalutazione con risposte brevi.",
-        "concepts": "Estrai i concetti chiave e spiegali brevemente."
-    }
+def generate_demo_response(action, lesson_title, lesson_text):
+    if action == "summary":
+        return f"""Riassunto del contenuto: {lesson_title}
 
-    instruction = actions.get(action, "Aiuta lo studente a comprendere il contenuto.")
+Questa lezione introduce il concetto di {lesson_title.lower()} e ne evidenzia il ruolo all'interno delle competenze digitali moderne.
 
-    return f"""
-Sei un AI Tutor integrato in Moodle.
+Il contenuto può essere usato in Moodle come materiale di studio e può essere supportato da un AI Tutor per aiutare lo studente a comprendere meglio i concetti principali."""
 
-Obiettivo:
-Supportare lo studente nello studio dei materiali del corso.
+    if action == "simple":
+        return f"""Spiegazione semplificata: {lesson_title}
 
-Titolo della lezione:
-{lesson_title}
+In parole semplici, questa lezione spiega un concetto tecnologico importante.
 
-Contenuto della lezione:
-{lesson_text}
+L'idea centrale è aiutare lo studente a capire non solo la definizione, ma anche perché questo argomento è utile nei percorsi formativi su AI, IoT e Digital Twin."""
 
-Richiesta:
-{instruction}
+    if action == "questions":
+        return f"""Domande di autovalutazione su: {lesson_title}
 
-Rispondi in italiano, in modo chiaro, ordinato e utile per lo studio.
-"""
+1. Qual è la definizione principale dell'argomento?
+2. Perché questo tema è importante nelle digital skills?
+3. Quali sono due possibili applicazioni pratiche?
+4. In che modo questo argomento può collegarsi ad AI, IoT o Digital Twin?
+5. Quali limiti o criticità possono emergere nell'uso di questa tecnologia?
 
+Risposta attesa:
+Lo studente dovrebbe dimostrare di aver compreso definizione, applicazioni e collegamenti con il contesto formativo."""
 
-def call_openai(prompt):
-    api_key = os.environ.get("OPENAI_API_KEY")
-    model = os.environ.get("AI_MODEL", "gpt-4o-mini")
+    if action == "concepts":
+        return f"""Concetti chiave estratti da: {lesson_title}
 
-    if not api_key:
-        return {
-            "error": "OPENAI_API_KEY non configurata. Per ottenere risposte AI reali devi impostare una chiave API nel terminale."
-        }
+- Definizione del concetto.
+- Applicazioni pratiche.
+- Ruolo nelle competenze digitali.
+- Collegamento con AI, IoT e Digital Twin.
+- Possibile uso in un ambiente Moodle potenziato dall'AI."""
 
-    payload = {
-        "model": model,
-        "input": prompt
-    }
-
-    req = urllib.request.Request(
-        "https://api.openai.com/v1/responses",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        },
-        method="POST"
-    )
-
-    try:
-        with urllib.request.urlopen(req, timeout=60) as response:
-            data = json.loads(response.read().decode("utf-8"))
-
-        if "output_text" in data:
-            return {"text": data["output_text"]}
-
-        texts = []
-        for item in data.get("output", []):
-            for content in item.get("content", []):
-                if content.get("type") in ("output_text", "text"):
-                    texts.append(content.get("text", ""))
-
-        if texts:
-            return {"text": "\n".join(texts)}
-
-        return {"text": json.dumps(data, indent=2, ensure_ascii=False)}
-
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="ignore")
-        return {"error": f"Errore API HTTP {e.code}: {body}"}
-    except Exception as e:
-        return {"error": f"Errore durante la chiamata AI: {str(e)}"}
+    return "Azione non riconosciuta."
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -102,10 +60,12 @@ class Handler(SimpleHTTPRequestHandler):
         lesson_title = data.get("lessonTitle", "")
         lesson_text = data.get("lessonText", "")
 
-        prompt = build_prompt(action, lesson_title, lesson_text)
-        result = call_openai(prompt)
+        response_data = {
+            "mode": "demo",
+            "text": generate_demo_response(action, lesson_title, lesson_text)
+        }
 
-        response = json.dumps(result, ensure_ascii=False).encode("utf-8")
+        response = json.dumps(response_data, ensure_ascii=False).encode("utf-8")
 
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -115,7 +75,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"AI Tutor backend running on http://{HOST}:{PORT}")
+    print(f"AI Tutor demo backend running on http://{HOST}:{PORT}")
     print("Open: /prototype/ai-tutor-real.html")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     server.serve_forever()
