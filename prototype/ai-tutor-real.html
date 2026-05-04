@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Tutor reale per Moodle</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      color: #111827;
+    }
+
+    header {
+      background: #0f172a;
+      color: white;
+      padding: 24px 32px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 30px;
+    }
+
+    header p {
+      margin: 8px 0 0;
+      color: #cbd5e1;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+    }
+
+    .full {
+      grid-column: 1 / -1;
+    }
+
+    h2 {
+      margin-top: 0;
+    }
+
+    select, button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 10px;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    select {
+      border: 1px solid #cbd5e1;
+    }
+
+    button {
+      border: none;
+      background: #2563eb;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .lesson {
+      margin-top: 16px;
+      background: #f8fafc;
+      border-left: 4px solid #2563eb;
+      padding: 16px;
+      border-radius: 8px;
+      line-height: 1.6;
+    }
+
+    .output {
+      min-height: 220px;
+      background: #f8fafc;
+      padding: 16px;
+      border-radius: 8px;
+      white-space: pre-line;
+      line-height: 1.6;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AI Tutor per Moodle</h1>
+    <p>Prototipo con backend: il testo della lezione viene inviato a un servizio AI tramite API.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <span class="badge">Contenuto Moodle</span>
+      <h2>Materiale del corso</h2>
+
+      <select id="lesson" onchange="changeLesson()">
+        <option value="ai">Introduzione all'Intelligenza Artificiale</option>
+        <option value="iot">Introduzione all'Internet of Things</option>
+        <option value="dt">Introduzione al Digital Twin</option>
+      </select>
+
+      <div id="lessonContent" class="lesson"></div>
+    </section>
+
+    <section class="card">
+      <span class="badge">Azioni AI</span>
+      <h2>AI Tutor</h2>
+
+      <button onclick="askTutor('summary')">Riassumi contenuto</button>
+      <button onclick="askTutor('simple')">Spiega in modo semplice</button>
+      <button onclick="askTutor('questions')">Genera domande di autovalutazione</button>
+      <button onclick="askTutor('concepts')">Estrai concetti chiave</button>
+    </section>
+
+    <section class="card full">
+      <span class="badge">Risposta generata</span>
+      <h2>Output AI Tutor</h2>
+      <div id="output" class="output">Seleziona un'azione per interrogare l'AI Tutor.</div>
+    </section>
+  </main>
+
+  <script>
+    const lessons = {
+      ai: {
+        title: "Introduzione all'Intelligenza Artificiale",
+        text: "L'Intelligenza Artificiale è un ambito dell'informatica che studia la progettazione di sistemi capaci di svolgere attività che normalmente richiedono intelligenza umana, come apprendimento, ragionamento, comprensione del linguaggio naturale e supporto alle decisioni."
+      },
+      iot: {
+        title: "Introduzione all'Internet of Things",
+        text: "L'Internet of Things indica l'insieme di dispositivi fisici connessi alla rete e capaci di raccogliere, scambiare ed elaborare dati. Sensori, attuatori, dispositivi indossabili e oggetti intelligenti possono comunicare tra loro e con piattaforme software."
+      },
+      dt: {
+        title: "Introduzione al Digital Twin",
+        text: "Il Digital Twin è una rappresentazione digitale di un oggetto, processo, ambiente o sistema reale. Attraverso dati raccolti da sensori e sistemi informativi, permette di monitorare lo stato del sistema, simulare scenari, prevedere comportamenti e supportare decisioni."
+      }
+    };
+
+    function getCurrentLesson() {
+      const selected = document.getElementById("lesson").value;
+      return lessons[selected];
+    }
+
+    function changeLesson() {
+      const lesson = getCurrentLesson();
+      document.getElementById("lessonContent").innerHTML =
+        "<strong>" + lesson.title + "</strong><br><br>" + lesson.text;
+      document.getElementById("output").innerText =
+        "Seleziona un'azione per interrogare l'AI Tutor.";
+    }
+
+    async function askTutor(action) {
+      const lesson = getCurrentLesson();
+      const output = document.getElementById("output");
+
+      output.innerText = "Richiesta inviata all'AI Tutor. Attendere...";
+
+      try {
+        const response = await fetch("/api/tutor", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            action: action,
+            lessonTitle: lesson.title,
+            lessonText: lesson.text
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          output.innerText = data.error;
+        } else {
+          output.innerText = data.text;
+        }
+      } catch (error) {
+        output.innerText = "Errore di connessione al backend AI Tutor: " + error;
+      }
+    }
+
+    changeLesson();
+  </script>
+</body>
+</html>
