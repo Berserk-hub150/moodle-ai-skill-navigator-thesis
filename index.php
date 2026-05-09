@@ -14,18 +14,41 @@ $PAGE->set_heading(get_string('pluginname', 'local_aiskillnavigator'));
 
 echo $OUTPUT->header();
 
-echo $OUTPUT->heading(get_string('welcome', 'local_aiskillnavigator'));
+echo $OUTPUT->heading(get_string('pluginname', 'local_aiskillnavigator'));
 
-echo html_writer::tag('p', 'Plugin Moodle installato correttamente.');
+echo html_writer::tag(
+    'p',
+    'AI Skill Navigator is a Moodle plugin prototype for personalised learning paths, AI tutoring, quiz generation and Virtual Worlds scenario generation.'
+);
 
-echo html_writer::tag('h3', 'Moduli previsti');
+echo html_writer::start_div('local-aiskillnavigator-menu');
+
+echo html_writer::tag('h3', 'Prototype modules');
 
 echo html_writer::start_tag('ul');
-echo html_writer::tag('li', 'Skill Navigator: mappa delle competenze dello studente');
-echo html_writer::tag('li', 'AI Tutor: spiegazioni e supporto contestuale');
-echo html_writer::tag('li', 'AI Quiz Generator: generazione quiz e micro-esercizi');
-echo html_writer::tag('li', 'AI XR Scenario Generator: scenari per Virtual Worlds');
-echo html_writer::tag('li', 'Teacher Dashboard: skill gap e report per docente');
+
+echo html_writer::tag(
+    'li',
+    html_writer::link(
+        new moodle_url('/local/aiskillnavigator/student.php'),
+        get_string('studentdashboard', 'local_aiskillnavigator')
+    )
+);
+
+echo html_writer::tag(
+    'li',
+    html_writer::link(
+        new moodle_url('/local/aiskillnavigator/teacher.php'),
+        get_string('teacherdashboard', 'local_aiskillnavigator')
+    )
+);
+
+echo html_writer::tag('li', 'AI Tutor - planned module');
+echo html_writer::tag('li', 'AI Quiz Generator - planned module');
+echo html_writer::tag('li', 'AI XR Scenario Generator - planned module');
+
 echo html_writer::end_tag('ul');
+
+echo html_writer::end_div();
 
 echo $OUTPUT->footer();
