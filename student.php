@@ -3,11 +3,12 @@
 
 require_once(__DIR__ . '/../../config.php');
 
+use local_aiskillnavigator\service\ai_recommendation_service;
 use local_aiskillnavigator\service\skill_service;
 
 require_login();
 
-global $USER;
+global $PAGE, $OUTPUT, $USER;
 
 $context = context_system::instance();
 
@@ -16,43 +17,72 @@ $PAGE->set_url(new moodle_url('/local/aiskillnavigator/student.php'));
 $PAGE->set_title(get_string('studentdashboard', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('studentdashboard', 'local_aiskillnavigator'));
 
-$service = new skill_service();
-$profile = $service->get_student_skill_profile((int) $USER->id);
+$skillservice = new skill_service();
+$recommendationservice = new ai_recommendation_service();
+
+$profile = $skillservice->get_student_skill_profile((int) $USER->id);
+$recommendation = $recommendationservice->generate_student_recommendation($profile);
 
 echo $OUTPUT->header();
 
-echo $OUTPUT->heading(get_string('studentdashboard', 'local_aiskillnavigator'));
+echo html_writer::start_div('container-fluid');
 
-echo html_writer::tag('p', 'This dashboard shows a first prototype of the student skill profile.');
+echo html_writer::tag('h2', get_string('studentdashboard', 'local_aiskillnavigator'));
+echo html_writer::tag(
+    'p',
+    'This dashboard shows a first prototype of the student skill profile.',
+    ['class' => 'lead']
+);
 
-echo html_writer::tag('h3', 'Skill profile');
-
-$table = new html_table();
-$table->head = ['Skill', 'Score', 'Status', 'Description'];
-$table->data = [];
+echo html_writer::start_div('row mt-4');
 
 foreach ($profile['skills'] as $skill) {
-    $table->data[] = [
-        s($skill['name']),
-        s($skill['score']) . '%',
-        s($skill['status']),
-        s($skill['description']),
-    ];
+    $badgeclass = $skillservice->get_score_badge_class((int) $skill['score']);
+
+    echo html_writer::start_div('col-md-6 mb-3');
+    echo html_writer::start_div('card h-100');
+    echo html_writer::start_div('card-body');
+
+    echo html_writer::tag('h4', s($skill['name']), ['class' => 'card-title']);
+
+    echo html_writer::tag(
+        'span',
+        s($skill['score']) . '% - ' . s($skill['status']),
+        ['class' => $badgeclass]
+    );
+
+    echo html_writer::tag('p', s($skill['description']), ['class' => 'mt-3']);
+
+    echo html_writer::tag('strong', 'Next action: ');
+    echo html_writer::tag('span', s($skill['nextaction']));
+
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+    echo html_writer::end_div();
 }
 
-echo html_writer::table($table);
+echo html_writer::end_div();
 
-echo html_writer::tag('h3', 'Main skill gap');
-echo html_writer::tag('p', s($profile['main_gap']));
+echo html_writer::start_div('card mt-4');
+echo html_writer::start_div('card-body');
 
-echo html_writer::tag('h3', 'AI recommendation prototype');
-echo html_writer::tag('p', s($profile['recommendation']));
+echo html_writer::tag('h3', get_string('main_gap', 'local_aiskillnavigator'));
+echo html_writer::tag('p', s($profile['main_gap']), ['class' => 'lead']);
+
+echo html_writer::tag('h3', get_string('ai_recommendation', 'local_aiskillnavigator'));
+echo html_writer::tag('p', s($recommendation));
+
+echo html_writer::end_div();
+echo html_writer::end_div();
 
 echo html_writer::div(
     html_writer::link(
         new moodle_url('/local/aiskillnavigator/index.php'),
-        'Back to plugin home'
+        'Back to plugin home',
+        ['class' => 'btn btn-secondary mt-3']
     )
 );
+
+echo html_writer::end_div();
 
 echo $OUTPUT->footer();

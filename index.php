@@ -5,6 +5,8 @@ require_once(__DIR__ . '/../../config.php');
 
 require_login();
 
+global $PAGE, $OUTPUT;
+
 $context = context_system::instance();
 
 $PAGE->set_context($context);
@@ -14,41 +16,70 @@ $PAGE->set_heading(get_string('pluginname', 'local_aiskillnavigator'));
 
 echo $OUTPUT->header();
 
-echo $OUTPUT->heading(get_string('pluginname', 'local_aiskillnavigator'));
+echo html_writer::start_div('container-fluid');
 
+echo html_writer::tag('h2', get_string('pluginname', 'local_aiskillnavigator'));
 echo html_writer::tag(
     'p',
-    'AI Skill Navigator is a Moodle plugin prototype for personalised learning paths, AI tutoring, quiz generation and Virtual Worlds scenario generation.'
+    'Prototype Moodle plugin for personalised learning paths on Artificial Intelligence, IoT, Digital Twin and Virtual Worlds.',
+    ['class' => 'lead']
 );
 
-echo html_writer::start_div('local-aiskillnavigator-menu');
+echo html_writer::start_div('row mt-4');
 
-echo html_writer::tag('h3', 'Prototype modules');
+$cards = [
+    [
+        'title' => get_string('studentdashboard', 'local_aiskillnavigator'),
+        'text' => 'View the student skill profile, main skill gap and personalised recommendation.',
+        'url' => new moodle_url('/local/aiskillnavigator/student.php'),
+        'button' => 'Open student dashboard',
+    ],
+    [
+        'title' => get_string('teacherdashboard', 'local_aiskillnavigator'),
+        'text' => 'View course-level skill gaps, students at risk and suggested teaching actions.',
+        'url' => new moodle_url('/local/aiskillnavigator/teacher.php'),
+        'button' => 'Open teacher dashboard',
+    ],
+    [
+        'title' => get_string('aitutor', 'local_aiskillnavigator'),
+        'text' => 'Ask questions and receive grounded prototype explanations on AI, IoT and Digital Twin.',
+        'url' => new moodle_url('/local/aiskillnavigator/tutor.php'),
+        'button' => 'Open AI Tutor',
+    ],
+    [
+        'title' => get_string('quizgenerator', 'local_aiskillnavigator'),
+        'text' => 'Generate adaptive quizzes and micro-exercises for a selected digital skill.',
+        'url' => new moodle_url('/local/aiskillnavigator/quizgenerator.php'),
+        'button' => 'Open Quiz Generator',
+    ],
+    [
+        'title' => get_string('scenariogenerator', 'local_aiskillnavigator'),
+        'text' => 'Generate structured Virtual Worlds training scenarios for digital skills.',
+        'url' => new moodle_url('/local/aiskillnavigator/scenariogenerator.php'),
+        'button' => 'Open Scenario Generator',
+    ],
+];
 
-echo html_writer::start_tag('ul');
+foreach ($cards as $card) {
+    echo html_writer::start_div('col-md-4 mb-3');
+    echo html_writer::start_div('card h-100');
+    echo html_writer::start_div('card-body');
 
-echo html_writer::tag(
-    'li',
-    html_writer::link(
-        new moodle_url('/local/aiskillnavigator/student.php'),
-        get_string('studentdashboard', 'local_aiskillnavigator')
-    )
-);
+    echo html_writer::tag('h4', s($card['title']), ['class' => 'card-title']);
+    echo html_writer::tag('p', s($card['text']), ['class' => 'card-text']);
 
-echo html_writer::tag(
-    'li',
-    html_writer::link(
-        new moodle_url('/local/aiskillnavigator/teacher.php'),
-        get_string('teacherdashboard', 'local_aiskillnavigator')
-    )
-);
+    echo html_writer::link(
+        $card['url'],
+        s($card['button']),
+        ['class' => 'btn btn-primary']
+    );
 
-echo html_writer::tag('li', 'AI Tutor - planned module');
-echo html_writer::tag('li', 'AI Quiz Generator - planned module');
-echo html_writer::tag('li', 'AI XR Scenario Generator - planned module');
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+}
 
-echo html_writer::end_tag('ul');
-
+echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo $OUTPUT->footer();
