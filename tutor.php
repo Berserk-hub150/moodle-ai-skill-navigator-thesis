@@ -32,7 +32,7 @@ echo html_writer::tag('h2', get_string('aitutor', 'local_aiskillnavigator'));
 
 echo html_writer::tag(
     'p',
-    'Real AI Tutor connected to OpenRouter. Ask a question about AI, IoT, Digital Twin or Virtual Worlds.',
+    'Ask questions and receive AI explanations rendered in a readable format.',
     ['class' => 'lead']
 );
 
@@ -56,7 +56,7 @@ echo html_writer::empty_tag('input', [
     'id' => 'question',
     'class' => 'form-control',
     'value' => s($question),
-    'placeholder' => 'Esempio: spiegami il rapporto tra IoT e Digital Twin',
+    'placeholder' => 'Esempio: spiegami come funziona Arduino Uno',
 ]);
 
 echo html_writer::end_div();
@@ -71,13 +71,22 @@ echo html_writer::end_tag('form');
 
 if ($answer !== '') {
     echo html_writer::start_div('card mt-4');
-    echo html_writer::start_div('card-body');
+    echo html_writer::start_div('card-body ai-answer-card');
 
     echo html_writer::tag('h3', 'AI answer');
 
-    echo html_writer::tag('pre', s($answer), [
-        'style' => 'white-space: pre-wrap; font-family: inherit; font-size: 1rem;',
-    ]);
+    $formattedanswer = format_text(
+        $answer,
+        FORMAT_MARKDOWN,
+        [
+            'context' => $context,
+            'trusted' => false,
+            'noclean' => false,
+            'filter' => true,
+        ]
+    );
+
+    echo html_writer::div($formattedanswer, 'ai-answer-content');
 
     echo html_writer::end_div();
     echo html_writer::end_div();
@@ -92,5 +101,41 @@ echo html_writer::div(
 );
 
 echo html_writer::end_div();
+
+echo html_writer::tag('style', '
+.ai-answer-card {
+    font-size: 1rem;
+    line-height: 1.55;
+}
+
+.ai-answer-content h2,
+.ai-answer-content h3,
+.ai-answer-content h4 {
+    margin-top: 1.4rem;
+    margin-bottom: 0.7rem;
+}
+
+.ai-answer-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+}
+
+.ai-answer-content th,
+.ai-answer-content td {
+    border: 1px solid #d8dee9;
+    padding: 8px 10px;
+}
+
+.ai-answer-content th {
+    background: #f3f6fb;
+}
+
+.ai-answer-content code {
+    background: #f3f4f6;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+');
 
 echo $OUTPUT->footer();

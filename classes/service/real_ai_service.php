@@ -49,8 +49,7 @@ class real_ai_service {
             . "Non scrivere testo prima o dopo il JSON.\n"
             . "Genera ESATTAMENTE 3 domande.\n"
             . "Ogni domanda deve avere ESATTAMENTE 4 opzioni.\n"
-            . "Le spiegazioni devono essere brevi, massimo 180 caratteri.\n"
-            . "Non citare standard ISO o normative specifiche se non sei sicuro.\n\n"
+            . "Le spiegazioni devono essere brevi, massimo 180 caratteri.\n\n"
             . "Formato obbligatorio:\n"
             . "{\n"
             . "\"title\":\"Titolo del test\",\n"
@@ -68,6 +67,40 @@ class real_ai_service {
             . "}";
 
         return $this->generate($prompt, 2200);
+    }
+
+    public function generate_mindmap(string $topic): string {
+        $prompt = "Genera una mappa mentale didattica semplice e interattiva in italiano.\n\n"
+            . "Argomento centrale: {$topic}\n\n"
+            . "REGOLE OBBLIGATORIE:\n"
+            . "Rispondi SOLO con JSON valido.\n"
+            . "Non usare Markdown.\n"
+            . "Non usare blocchi ```.\n"
+            . "Non scrivere testo prima o dopo il JSON.\n"
+            . "Genera ESATTAMENTE 4 rami principali.\n"
+            . "Ogni ramo deve avere ESATTAMENTE 2 sotto-nodi.\n"
+            . "Ogni titolo deve essere corto: massimo 4 parole.\n"
+            . "Ogni descrizione deve essere chiara: massimo 180 caratteri.\n"
+            . "La mappa deve essere utile per studiare e ripassare.\n\n"
+            . "Formato JSON obbligatorio:\n"
+            . "{\n"
+            . "\"title\":\"Titolo corto\",\n"
+            . "\"central_topic\":\"{$topic}\",\n"
+            . "\"summary\":\"Sintesi breve dell'argomento\",\n"
+            . "\"central_description\":\"Spiegazione del concetto centrale\",\n"
+            . "\"branches\":[\n"
+            . "{\n"
+            . "\"title\":\"Ramo principale\",\n"
+            . "\"description\":\"Spiegazione del ramo principale\",\n"
+            . "\"children\":[\n"
+            . "{\"title\":\"Sotto nodo 1\",\"description\":\"Spiegazione del sotto nodo 1\"},\n"
+            . "{\"title\":\"Sotto nodo 2\",\"description\":\"Spiegazione del sotto nodo 2\"}\n"
+            . "]\n"
+            . "}\n"
+            . "]\n"
+            . "}";
+
+        return $this->generate($prompt, 1500);
     }
 
     public function generate_xr_scenario(string $topic, string $environment): string {

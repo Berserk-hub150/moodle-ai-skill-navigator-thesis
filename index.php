@@ -42,15 +42,21 @@ $cards = [
     ],
     [
         'title' => get_string('aitutor', 'local_aiskillnavigator'),
-        'text' => 'Ask questions and receive grounded prototype explanations on AI, IoT and Digital Twin.',
+        'text' => 'Ask questions and receive AI explanations on AI, IoT, Digital Twin and Virtual Worlds.',
         'url' => new moodle_url('/local/aiskillnavigator/tutor.php'),
         'button' => 'Open AI Tutor',
     ],
     [
         'title' => get_string('quizgenerator', 'local_aiskillnavigator'),
-        'text' => 'Generate adaptive quizzes and micro-exercises for a selected digital skill.',
+        'text' => 'Generate an AI micro-test, let the student answer it, and calculate a score.',
         'url' => new moodle_url('/local/aiskillnavigator/quizgenerator.php'),
         'button' => 'Open Quiz Generator',
+    ],
+    [
+        'title' => get_string('mindmapgenerator', 'local_aiskillnavigator'),
+        'text' => 'Generate a structured mind map to organise concepts, skills and study paths.',
+        'url' => new moodle_url('/local/aiskillnavigator/mindmapgenerator.php'),
+        'button' => 'Open Mind Map Generator',
     ],
     [
         'title' => get_string('scenariogenerator', 'local_aiskillnavigator'),
