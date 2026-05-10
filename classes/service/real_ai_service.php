@@ -35,16 +35,39 @@ class real_ai_service {
             . "Domanda dello studente:\n"
             . $question;
 
-        return $this->generate($prompt);
+        return $this->generate($prompt, 1000);
     }
 
     public function generate_quiz(string $topic, string $difficulty): string {
-        $prompt = "Genera un quiz didattico in italiano per Moodle.\n\n"
+        $prompt = "Genera un micro-test universitario in italiano per Moodle.\n\n"
             . "Argomento: {$topic}\n"
             . "Difficoltà: {$difficulty}\n\n"
-            . "Genera tre domande a risposta multipla con quattro opzioni, risposta corretta e breve spiegazione.";
+            . "REGOLE OBBLIGATORIE:\n"
+            . "Rispondi SOLO con JSON valido.\n"
+            . "Non usare Markdown.\n"
+            . "Non usare blocchi ```.\n"
+            . "Non scrivere testo prima o dopo il JSON.\n"
+            . "Genera ESATTAMENTE 3 domande.\n"
+            . "Ogni domanda deve avere ESATTAMENTE 4 opzioni.\n"
+            . "Le spiegazioni devono essere brevi, massimo 180 caratteri.\n"
+            . "Non citare standard ISO o normative specifiche se non sei sicuro.\n\n"
+            . "Formato obbligatorio:\n"
+            . "{\n"
+            . "\"title\":\"Titolo del test\",\n"
+            . "\"topic\":\"{$topic}\",\n"
+            . "\"difficulty\":\"{$difficulty}\",\n"
+            . "\"questions\":[\n"
+            . "{\n"
+            . "\"question\":\"Testo domanda\",\n"
+            . "\"options\":[\"Opzione A\",\"Opzione B\",\"Opzione C\",\"Opzione D\"],\n"
+            . "\"correct_index\":0,\n"
+            . "\"explanation\":\"Spiegazione breve\",\n"
+            . "\"skill\":\"Competenza valutata\"\n"
+            . "}\n"
+            . "]\n"
+            . "}";
 
-        return $this->generate($prompt);
+        return $this->generate($prompt, 2200);
     }
 
     public function generate_xr_scenario(string $topic, string $environment): string {
@@ -53,10 +76,10 @@ class real_ai_service {
             . "Ambiente virtuale: {$environment}\n\n"
             . "Usa queste sezioni: titolo, obiettivo didattico, ambiente, storia, task studente, criteri di valutazione, competenze coinvolte.";
 
-        return $this->generate($prompt);
+        return $this->generate($prompt, 1400);
     }
 
-    private function generate(string $prompt): string {
+    private function generate(string $prompt, int $maxtokens = 1200): string {
         if ($this->provider !== 'openrouter') {
             return 'Provider non configurato correttamente. Imposta provider = openrouter.';
         }
@@ -72,15 +95,15 @@ class real_ai_service {
             'messages' => [
                 [
                     'role' => 'system',
-                    'content' => 'You are a helpful educational AI assistant integrated into Moodle. Always answer in Italian.',
+                    'content' => 'You are a precise educational assistant integrated into Moodle. Follow the requested output format exactly. If JSON is requested, output valid JSON only.',
                 ],
                 [
                     'role' => 'user',
                     'content' => $prompt,
                 ],
             ],
-            'temperature' => 0.4,
-            'max_tokens' => 900,
+            'temperature' => 0.2,
+            'max_tokens' => $maxtokens,
             'stream' => false,
         ];
 
