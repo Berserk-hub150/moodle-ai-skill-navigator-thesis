@@ -27,3 +27,6 @@ $string['provider'] = 'AI provider';
 $string['provider_desc'] = 'Select the AI provider used by the plugin.';
 $string['apikey'] = 'AI API key';
 $string['apikey_desc'] = 'API key for the external AI provider.';
+$string['local/aiskillnavigator:viewstudent'] = 'Use student AI tools';
+$string['local/aiskillnavigator:viewteacher'] = 'Use teacher AI tools';
+$string['local/aiskillnavigator:managematerials'] = 'Manage teacher AI materials';

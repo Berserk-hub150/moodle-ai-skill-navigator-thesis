@@ -11,6 +11,8 @@ global $PAGE, $OUTPUT;
 
 $context = context_system::instance();
 
+require_capability('local/aiskillnavigator:viewstudent', $context);
+
 $PAGE->set_context($context);
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/mindmapgenerator.php'));
 $PAGE->set_title(get_string('mindmapgenerator', 'local_aiskillnavigator'));
@@ -87,11 +89,11 @@ function local_aiskillnavigator_extract_json(string $raw): ?array {
     }
 
     if (empty($decoded['summary'])) {
-        $decoded['summary'] = 'Mappa mentale interattiva generata per organizzare lo studio dell’argomento.';
+        $decoded['summary'] = 'Mappa mentale interattiva generata per organizzare lo studio dellâ€™argomento.';
     }
 
     if (empty($decoded['central_description'])) {
-        $decoded['central_description'] = 'Questo è il concetto centrale della mappa. I rami mostrano definizione, parti principali, funzionamento e applicazioni.';
+        $decoded['central_description'] = 'Questo Ã¨ il concetto centrale della mappa. I rami mostrano definizione, parti principali, funzionamento e applicazioni.';
     }
 
     return $decoded;
@@ -132,7 +134,7 @@ if ($generate) {
     }
 
     if ($mindmap === null) {
-        $parseerror = 'L’AI ha restituito un JSON incompleto o non valido. Riprova con un argomento più specifico, per esempio "Arduino Uno components" invece di "Arduino".';
+        $parseerror = 'Lâ€™AI ha restituito un JSON incompleto o non valido. Riprova con un argomento piÃ¹ specifico, per esempio "Arduino Uno components" invece di "Arduino".';
     }
 }
 
@@ -259,7 +261,7 @@ if ($mindmap !== null) {
             'infoTitle' => $branchtitle,
             'infoType' => 'Ramo principale',
             'infoDescription' => $branchdescription,
-            'infoHint' => 'Questo ramo organizza una parte importante dell’argomento.',
+            'infoHint' => 'Questo ramo organizza una parte importante dellâ€™argomento.',
             'title' => $branchdescription,
             'widthConstraint' => ['minimum' => 180, 'maximum' => 230],
         ];

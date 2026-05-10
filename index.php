@@ -3,68 +3,122 @@
 
 require_once(__DIR__ . '/../../config.php');
 
-require_login();
+global $PAGE, $OUTPUT, $USER;
 
-global $PAGE, $OUTPUT;
+$courseid = optional_param('courseid', SITEID, PARAM_INT);
+$course = get_course($courseid);
 
-$context = context_system::instance();
+require_login($course);
+
+$context = context_course::instance($courseid);
 
 $PAGE->set_context($context);
-$PAGE->set_url(new moodle_url('/local/aiskillnavigator/index.php'));
+$PAGE->set_url(new moodle_url('/local/aiskillnavigator/index.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('pluginname', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('pluginname', 'local_aiskillnavigator'));
+
+$canstudent = has_capability('local/aiskillnavigator:viewstudent', $context);
+$canteacher = has_capability('local/aiskillnavigator:viewteacher', $context);
+$canmaterials = has_capability('local/aiskillnavigator:managematerials', $context);
+$isadmin = is_siteadmin($USER);
 
 echo $OUTPUT->header();
 
 echo html_writer::start_div('container-fluid');
 
 echo html_writer::tag('h2', get_string('pluginname', 'local_aiskillnavigator'));
+
 echo html_writer::tag(
     'p',
-    'Prototype Moodle plugin for personalised learning paths on Artificial Intelligence, IoT, Digital Twin and Virtual Worlds.',
+    'Prototype Moodle plugin for AI-supported learning paths, grounded course tutoring, interactive quizzes and mind maps.',
     ['class' => 'lead']
 );
 
+echo html_writer::tag(
+    'p',
+    'Course: ' . s($course->fullname),
+    ['class' => 'text-muted']
+);
+
+if ($isadmin) {
+    echo html_writer::div(
+        'You are logged in as site administrator, so Moodle shows both student and teacher tools. Use student1/teacher1 in incognito to test separation.',
+        'alert alert-info'
+    );
+}
+
 echo html_writer::start_div('row mt-4');
 
-$cards = [
-    [
-        'title' => get_string('studentdashboard', 'local_aiskillnavigator'),
-        'text' => 'View the student skill profile, main skill gap and personalised recommendation.',
-        'url' => new moodle_url('/local/aiskillnavigator/student.php'),
+$cards = [];
+
+if ($canstudent) {
+    $cards[] = [
+        'title' => 'Student dashboard',
+        'text' => 'View your saved quiz scores and personal recommendations.',
+        'url' => new moodle_url('/local/aiskillnavigator/student.php', ['courseid' => $courseid]),
         'button' => 'Open student dashboard',
-    ],
-    [
-        'title' => get_string('teacherdashboard', 'local_aiskillnavigator'),
-        'text' => 'View course-level skill gaps, students at risk and suggested teaching actions.',
-        'url' => new moodle_url('/local/aiskillnavigator/teacher.php'),
-        'button' => 'Open teacher dashboard',
-    ],
-    [
-        'title' => get_string('aitutor', 'local_aiskillnavigator'),
-        'text' => 'Ask questions and receive AI explanations on AI, IoT, Digital Twin and Virtual Worlds.',
-        'url' => new moodle_url('/local/aiskillnavigator/tutor.php'),
-        'button' => 'Open AI Tutor',
-    ],
-    [
-        'title' => get_string('quizgenerator', 'local_aiskillnavigator'),
-        'text' => 'Generate an AI micro-test, let the student answer it, and calculate a score.',
-        'url' => new moodle_url('/local/aiskillnavigator/quizgenerator.php'),
+    ];
+
+    $cards[] = [
+        'title' => 'Course AI Tutor',
+        'text' => 'Ask questions grounded on the teacher materials saved in the course knowledge base.',
+        'url' => new moodle_url('/local/aiskillnavigator/course_tutor.php', ['courseid' => $courseid]),
+        'button' => 'Open Course Tutor',
+    ];
+
+    $cards[] = [
+        'title' => 'AI Quiz Generator',
+        'text' => 'Generate an AI micro-test, answer it, and save the score.',
+        'url' => new moodle_url('/local/aiskillnavigator/quizgenerator.php', ['courseid' => $courseid]),
         'button' => 'Open Quiz Generator',
-    ],
-    [
-        'title' => get_string('mindmapgenerator', 'local_aiskillnavigator'),
-        'text' => 'Generate a structured mind map to organise concepts, skills and study paths.',
-        'url' => new moodle_url('/local/aiskillnavigator/mindmapgenerator.php'),
+    ];
+
+    $cards[] = [
+        'title' => 'AI Mind Map Generator',
+        'text' => 'Generate an interactive draggable mind map from an AI-generated concept structure.',
+        'url' => new moodle_url('/local/aiskillnavigator/mindmapgenerator.php', ['courseid' => $courseid]),
         'button' => 'Open Mind Map Generator',
-    ],
-    [
-        'title' => get_string('scenariogenerator', 'local_aiskillnavigator'),
+    ];
+
+    $cards[] = [
+        'title' => 'General AI Tutor',
+        'text' => 'Ask general AI questions about course-related topics.',
+        'url' => new moodle_url('/local/aiskillnavigator/tutor.php', ['courseid' => $courseid]),
+        'button' => 'Open AI Tutor',
+    ];
+}
+
+if ($canteacher) {
+    $cards[] = [
+        'title' => 'Teacher dashboard',
+        'text' => 'View class performance, materials and students at risk.',
+        'url' => new moodle_url('/local/aiskillnavigator/teacher.php', ['courseid' => $courseid]),
+        'button' => 'Open teacher dashboard',
+    ];
+
+    $cards[] = [
+        'title' => 'AI XR Scenario Generator',
         'text' => 'Generate structured Virtual Worlds training scenarios for digital skills.',
-        'url' => new moodle_url('/local/aiskillnavigator/scenariogenerator.php'),
+        'url' => new moodle_url('/local/aiskillnavigator/scenariogenerator.php', ['courseid' => $courseid]),
         'button' => 'Open Scenario Generator',
-    ],
-];
+    ];
+}
+
+if ($canmaterials) {
+    $cards[] = [
+        'title' => 'Teacher Materials',
+        'text' => 'Upload PowerPoint slides or text files. The AI Course Tutor uses the extracted text.',
+        'url' => new moodle_url('/local/aiskillnavigator/teacher_materials.php', ['courseid' => $courseid]),
+        'button' => 'Manage materials',
+    ];
+}
+
+if (empty($cards)) {
+    echo html_writer::div(
+        'No AI Skill Navigator tools are available for your current Moodle role in this course.',
+        'alert alert-warning'
+    );
+}
 
 foreach ($cards as $card) {
     echo html_writer::start_div('col-md-4 mb-3');

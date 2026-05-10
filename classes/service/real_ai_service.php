@@ -38,6 +38,45 @@ class real_ai_service {
         return $this->generate($prompt, 1000);
     }
 
+    public function ask_with_course_materials(string $question, array $materials): string {
+        if (empty($materials)) {
+            return "Non sono stati trovati materiali del docente rilevanti per rispondere alla domanda. Chiedi al docente di caricare slide, appunti o dispense nella Knowledge Base del corso.";
+        }
+
+        $context = "";
+
+        foreach ($materials as $index => $material) {
+            $number = $index + 1;
+            $title = $material->title ?? 'Materiale senza titolo';
+            $type = $material->materialtype ?? 'text';
+            $content = $material->content ?? '';
+
+            $content = trim(preg_replace('/\s+/', ' ', $content));
+
+            if (mb_strlen($content) > 2200) {
+                $content = mb_substr($content, 0, 2200) . '...';
+            }
+
+            $context .= "FONTE {$number}\n";
+            $context .= "Titolo: {$title}\n";
+            $context .= "Tipo: {$type}\n";
+            $context .= "Contenuto: {$content}\n\n";
+        }
+
+        $prompt = "Sei un tutor AI integrato in Moodle.\n"
+            . "Devi rispondere alla domanda dello studente usando SOLO i materiali del docente forniti sotto.\n"
+            . "Se i materiali non bastano, dillo chiaramente.\n"
+            . "Rispondi in italiano.\n"
+            . "Organizza la risposta con sezioni brevi e leggibili.\n"
+            . "Alla fine aggiungi una sezione 'Fonti usate' con i titoli dei materiali usati.\n\n"
+            . "MATERIALI DEL DOCENTE:\n"
+            . $context
+            . "DOMANDA DELLO STUDENTE:\n"
+            . $question;
+
+        return $this->generate($prompt, 1400);
+    }
+
     public function generate_quiz(string $topic, string $difficulty): string {
         $prompt = "Genera un micro-test universitario in italiano per Moodle.\n\n"
             . "Argomento: {$topic}\n"
@@ -80,8 +119,7 @@ class real_ai_service {
             . "Genera ESATTAMENTE 4 rami principali.\n"
             . "Ogni ramo deve avere ESATTAMENTE 2 sotto-nodi.\n"
             . "Ogni titolo deve essere corto: massimo 4 parole.\n"
-            . "Ogni descrizione deve essere chiara: massimo 180 caratteri.\n"
-            . "La mappa deve essere utile per studiare e ripassare.\n\n"
+            . "Ogni descrizione deve essere chiara: massimo 180 caratteri.\n\n"
             . "Formato JSON obbligatorio:\n"
             . "{\n"
             . "\"title\":\"Titolo corto\",\n"
@@ -128,7 +166,7 @@ class real_ai_service {
             'messages' => [
                 [
                     'role' => 'system',
-                    'content' => 'You are a precise educational assistant integrated into Moodle. Follow the requested output format exactly. If JSON is requested, output valid JSON only.',
+                    'content' => 'You are a precise educational assistant integrated into Moodle. Follow the requested output format exactly.',
                 ],
                 [
                     'role' => 'user',

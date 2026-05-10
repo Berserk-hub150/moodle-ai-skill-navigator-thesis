@@ -22,7 +22,6 @@ function xmldb_local_aiskillnavigator_upgrade($oldversion) {
             $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
 
             $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
-
             $table->add_index('courseid_ix', XMLDB_INDEX_NOTUNIQUE, ['courseid']);
             $table->add_index('userid_ix', XMLDB_INDEX_NOTUNIQUE, ['userid']);
 
@@ -45,7 +44,6 @@ function xmldb_local_aiskillnavigator_upgrade($oldversion) {
             $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
 
             $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
-
             $table->add_index('courseid_ix', XMLDB_INDEX_NOTUNIQUE, ['courseid']);
             $table->add_index('userid_ix', XMLDB_INDEX_NOTUNIQUE, ['userid']);
             $table->add_index('topic_ix', XMLDB_INDEX_NOTUNIQUE, ['topic']);
@@ -54,6 +52,14 @@ function xmldb_local_aiskillnavigator_upgrade($oldversion) {
         }
 
         upgrade_plugin_savepoint(true, 2026051001, 'local', 'aiskillnavigator');
+    }
+
+    if ($oldversion < 2026051002) {
+        upgrade_plugin_savepoint(true, 2026051002, 'local', 'aiskillnavigator');
+    }
+
+    if ($oldversion < 2026051003) {
+        upgrade_plugin_savepoint(true, 2026051003, 'local', 'aiskillnavigator');
     }
 
     return true;

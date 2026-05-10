@@ -7,15 +7,18 @@ use local_aiskillnavigator\service\real_ai_service;
 
 require_login();
 
-global $PAGE, $OUTPUT;
+global $PAGE, $OUTPUT, $DB, $USER;
 
 $context = context_system::instance();
+
+require_capability('local/aiskillnavigator:viewstudent', $context);
 
 $PAGE->set_context($context);
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/quizgenerator.php'));
 $PAGE->set_title(get_string('quizgenerator', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('quizgenerator', 'local_aiskillnavigator'));
 
+$courseid = optional_param('courseid', SITEID, PARAM_INT);
 $topic = optional_param('topic', 'Digital Twin', PARAM_TEXT);
 $difficulty = optional_param('difficulty', 'medium', PARAM_ALPHA);
 $generate = optional_param('generate', 0, PARAM_BOOL);
@@ -26,6 +29,29 @@ $quiz = null;
 $score = null;
 $total = 0;
 $studentanswers = [];
+$savedmessage = '';
+
+function local_aiskillnavigator_extract_quiz_json(string $raw): ?array {
+    $cleanresult = trim($raw);
+    $cleanresult = preg_replace('/^```json\s*/i', '', $cleanresult);
+    $cleanresult = preg_replace('/^```\s*/i', '', $cleanresult);
+    $cleanresult = preg_replace('/\s*```$/', '', $cleanresult);
+
+    $jsonstart = strpos($cleanresult, '{');
+    $jsonend = strrpos($cleanresult, '}');
+
+    if ($jsonstart !== false && $jsonend !== false && $jsonend > $jsonstart) {
+        $cleanresult = substr($cleanresult, $jsonstart, $jsonend - $jsonstart + 1);
+    }
+
+    $decoded = json_decode($cleanresult, true);
+
+    if (is_array($decoded) && !empty($decoded['questions']) && is_array($decoded['questions'])) {
+        return $decoded;
+    }
+
+    return null;
+}
 
 if ($action === 'grade') {
     require_sesskey();
@@ -51,28 +77,29 @@ if ($action === 'grade') {
                 $score++;
             }
         }
+
+        $percentage = $total > 0 ? (int) round(($score / $total) * 100) : 0;
+
+        $record = new stdClass();
+        $record->courseid = $courseid;
+        $record->userid = $USER->id;
+        $record->topic = (string) ($quiz['topic'] ?? $topic);
+        $record->difficulty = (string) ($quiz['difficulty'] ?? $difficulty);
+        $record->score = $score;
+        $record->maxscore = $total;
+        $record->percentage = $percentage;
+        $record->quizjson = json_encode($quiz);
+        $record->answersjson = json_encode($studentanswers);
+        $record->timecreated = time();
+
+        $DB->insert_record('local_aiskillnav_attempt', $record);
+
+        $savedmessage = 'Quiz attempt saved in the student profile.';
     }
 } else if ($generate) {
     $service = new real_ai_service();
     $result = $service->generate_quiz($topic, $difficulty);
-
-    $cleanresult = trim($result);
-    $cleanresult = preg_replace('/^```json\s*/i', '', $cleanresult);
-    $cleanresult = preg_replace('/^```\s*/i', '', $cleanresult);
-    $cleanresult = preg_replace('/\s*```$/', '', $cleanresult);
-
-    $jsonstart = strpos($cleanresult, '{');
-    $jsonend = strrpos($cleanresult, '}');
-
-    if ($jsonstart !== false && $jsonend !== false && $jsonend > $jsonstart) {
-        $cleanresult = substr($cleanresult, $jsonstart, $jsonend - $jsonstart + 1);
-    }
-
-    $decoded = json_decode($cleanresult, true);
-
-    if (is_array($decoded) && !empty($decoded['questions']) && is_array($decoded['questions'])) {
-        $quiz = $decoded;
-    }
+    $quiz = local_aiskillnavigator_extract_quiz_json($result);
 }
 
 echo $OUTPUT->header();
@@ -83,9 +110,13 @@ echo html_writer::tag('h2', get_string('quizgenerator', 'local_aiskillnavigator'
 
 echo html_writer::tag(
     'p',
-    'Generate an AI micro-quiz, let the student answer it, and receive an automatic score with feedback.',
+    'Generate an AI micro-quiz, let the student answer it, and save the score in Moodle.',
     ['class' => 'lead']
 );
+
+if ($savedmessage !== '') {
+    echo html_writer::div(s($savedmessage), 'alert alert-success');
+}
 
 echo html_writer::start_div('card mb-4');
 echo html_writer::start_div('card-body');
@@ -103,33 +134,25 @@ echo html_writer::empty_tag('input', [
     'value' => '1',
 ]);
 
+echo html_writer::empty_tag('input', [
+    'type' => 'hidden',
+    'name' => 'courseid',
+    'value' => $courseid,
+]);
+
 echo html_writer::start_div('form-group');
-
-echo html_writer::tag(
-    'label',
-    get_string('quiz_topic', 'local_aiskillnavigator'),
-    ['for' => 'topic']
-);
-
+echo html_writer::tag('label', get_string('quiz_topic', 'local_aiskillnavigator'), ['for' => 'topic']);
 echo html_writer::empty_tag('input', [
     'type' => 'text',
     'name' => 'topic',
     'id' => 'topic',
     'class' => 'form-control',
     'value' => s($topic),
-    'placeholder' => 'Esempio: Digital Twin, IoT sensors, AI model evaluation...',
 ]);
-
 echo html_writer::end_div();
 
 echo html_writer::start_div('form-group mt-3');
-
-echo html_writer::tag(
-    'label',
-    'Difficulty',
-    ['for' => 'difficulty']
-);
-
+echo html_writer::tag('label', 'Difficulty', ['for' => 'difficulty']);
 echo html_writer::select(
     [
         'easy' => 'Easy',
@@ -144,7 +167,6 @@ echo html_writer::select(
         'id' => 'difficulty',
     ]
 );
-
 echo html_writer::end_div();
 
 echo html_writer::empty_tag('input', [
@@ -166,7 +188,6 @@ if ($quiz !== null) {
     echo html_writer::start_div('card-body');
 
     echo html_writer::tag('h3', s($quiz['title'] ?? 'Generated AI test'));
-
     echo html_writer::tag(
         'p',
         'Topic: ' . s($quiz['topic'] ?? $topic) . ' | Difficulty: ' . s($quiz['difficulty'] ?? $difficulty),
@@ -212,6 +233,24 @@ if ($quiz !== null) {
 
     echo html_writer::empty_tag('input', [
         'type' => 'hidden',
+        'name' => 'courseid',
+        'value' => $courseid,
+    ]);
+
+    echo html_writer::empty_tag('input', [
+        'type' => 'hidden',
+        'name' => 'topic',
+        'value' => s($topic),
+    ]);
+
+    echo html_writer::empty_tag('input', [
+        'type' => 'hidden',
+        'name' => 'difficulty',
+        'value' => s($difficulty),
+    ]);
+
+    echo html_writer::empty_tag('input', [
+        'type' => 'hidden',
         'name' => 'quizdata',
         'value' => s($encodedquiz),
     ]);
@@ -221,12 +260,7 @@ if ($quiz !== null) {
         echo html_writer::start_div('card-body');
 
         echo html_writer::tag('h4', 'Question ' . ($index + 1));
-
-        echo html_writer::tag(
-            'p',
-            s($question['question'] ?? ''),
-            ['class' => 'font-weight-bold']
-        );
+        echo html_writer::tag('p', s($question['question'] ?? ''), ['class' => 'font-weight-bold']);
 
         $options = $question['options'] ?? [];
         $correctindex = isset($question['correct_index']) ? (int) $question['correct_index'] : -1;
@@ -279,18 +313,11 @@ if ($quiz !== null) {
 
         if ($score !== null) {
             if (!empty($question['skill'])) {
-                echo html_writer::tag(
-                    'p',
-                    html_writer::tag('strong', 'Skill: ') . s($question['skill']),
-                    ['class' => 'mt-3']
-                );
+                echo html_writer::tag('p', html_writer::tag('strong', 'Skill: ') . s($question['skill']), ['class' => 'mt-3']);
             }
 
             if (!empty($question['explanation'])) {
-                echo html_writer::tag(
-                    'p',
-                    html_writer::tag('strong', 'Explanation: ') . s($question['explanation'])
-                );
+                echo html_writer::tag('p', html_writer::tag('strong', 'Explanation: ') . s($question['explanation']));
             }
         }
 
@@ -310,6 +337,7 @@ if ($quiz !== null) {
                 'generate' => 1,
                 'topic' => $topic,
                 'difficulty' => $difficulty,
+                'courseid' => $courseid,
             ]),
             'Generate another test',
             ['class' => 'btn btn-primary mt-3']

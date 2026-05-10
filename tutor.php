@@ -11,6 +11,8 @@ global $PAGE, $OUTPUT;
 
 $context = context_system::instance();
 
+require_capability('local/aiskillnavigator:viewstudent', $context);
+
 $PAGE->set_context($context);
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/tutor.php'));
 $PAGE->set_title(get_string('aitutor', 'local_aiskillnavigator'));
