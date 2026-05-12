@@ -1,315 +1,471 @@
 <?php
 // This file is part of Moodle - https://moodle.org/
 
-require_once(__DIR__ . '/../../config.php');
+namespace local_aiskillnavigator\service;
 
-use local_aiskillnavigator\service\real_ai_service;
+defined('MOODLE_INTERNAL') || die();
 
-require_login();
+class real_ai_service {
 
-global $PAGE, $OUTPUT, $DB;
+    private string $provider;
+    private string $endpoint;
+    private string $model;
+    private string $apikey;
 
-$context = context_system::instance();
+    public function __construct() {
+        $provider = trim((string) get_config('local_aiskillnavigator', 'provider'));
+        $endpoint = trim((string) get_config('local_aiskillnavigator', 'endpoint'));
+        $model = trim((string) get_config('local_aiskillnavigator', 'model'));
+        $apikey = trim((string) get_config('local_aiskillnavigator', 'apikey'));
 
-require_capability('local/aiskillnavigator:viewstudent', $context);
-
-$PAGE->set_context($context);
-$PAGE->set_url(new moodle_url('/local/aiskillnavigator/course_tutor.php'));
-$PAGE->set_title('Course AI Tutor');
-$PAGE->set_heading('Course AI Tutor');
-
-$courseid = optional_param('courseid', SITEID, PARAM_INT);
-$question = optional_param('question', '', PARAM_TEXT);
-
-$answer = '';
-$selectedmaterials = [];
-$warning = '';
-
-function local_aiskillnavigator_is_summary_question(string $question): bool {
-    $q = core_text::strtolower($question);
-
-    $needles = [
-        'riassumi',
-        'riassunto',
-        'sintesi',
-        'concetti principali',
-        'slide',
-        'materiale',
-        'materiali',
-        'lezione',
-        'spiegami tutto',
-        'cosa dicono',
-    ];
-
-    foreach ($needles as $needle) {
-        if (strpos($q, $needle) !== false) {
-            return true;
-        }
+        $this->provider = $provider !== '' ? $provider : 'ollama';
+        $this->endpoint = $endpoint !== '' ? $endpoint : 'http://host.docker.internal:11434';
+        $this->model = $model !== '' ? $model : 'qwen2.5:3b';
+        $this->apikey = $apikey;
     }
 
-    return false;
-}
+    public function ask_tutor(string $question): string {
+        $question = trim($question);
 
-function local_aiskillnavigator_score_material(stdClass $material, string $question): int {
-    $question = core_text::strtolower($question);
-    $title = core_text::strtolower($material->title ?? '');
-    $content = core_text::strtolower($material->content ?? '');
-
-    $words = preg_split('/[^\p{L}\p{N}]+/u', $question);
-    $score = 0;
-
-    foreach ($words as $word) {
-        $word = trim($word);
-
-        if (core_text::strlen($word) < 4) {
-            continue;
+        if ($question === '') {
+            return 'Scrivi una domanda prima di inviarla al tutor AI.';
         }
 
-        if (strpos($title, $word) !== false) {
-            $score += 4;
-        }
+        $prompt = "Sei un tutor universitario integrato in Moodle.\n"
+            . "Rispondi in italiano, in modo chiaro, didattico e sintetico.\n"
+            . "Puoi rispondere su qualsiasi argomento richiesto dallo studente.\n"
+            . "Se non sei sicuro di un dettaglio specifico, dichiaralo chiaramente invece di inventare.\n\n"
+            . "Domanda dello studente:\n"
+            . $question;
 
-        if (strpos($content, $word) !== false) {
-            $score += 1;
-        }
+        return $this->generate($prompt, 1000);
     }
 
-    return $score;
-}
+    public function ask_with_course_materials(string $question, array $materials): string {
+        $question = trim($question);
 
-function local_aiskillnavigator_material_preview(string $content, int $limit = 1200): string {
-    $preview = trim($content);
-    $preview = preg_replace('/[ \t]+/', ' ', $preview);
-    $preview = preg_replace("/\n{3,}/", "\n\n", $preview);
-
-    if (core_text::strlen($preview) > $limit) {
-        $preview = core_text::substr($preview, 0, $limit) . '...';
-    }
-
-    return $preview;
-}
-
-if ($question !== '') {
-    $allmaterials = $DB->get_records(
-        'local_aiskillnav_material',
-        ['courseid' => $courseid],
-        'timecreated ASC'
-    );
-
-    $readablematerials = [];
-
-    foreach ($allmaterials as $material) {
-        $content = trim((string) ($material->content ?? ''));
-
-        if ($content !== '') {
-            $readablematerials[] = $material;
-        }
-    }
-
-    if (empty($readablematerials)) {
-        $warning = 'Sono presenti materiali, ma il testo estratto Ã¨ vuoto. Probabilmente le slide contengono immagini/testo non selezionabile.';
-    } else if (local_aiskillnavigator_is_summary_question($question)) {
-        $selectedmaterials = array_slice($readablematerials, 0, 10);
-    } else {
-        $scored = [];
-
-        foreach ($readablematerials as $material) {
-            $score = local_aiskillnavigator_score_material($material, $question);
-
-            if ($score > 0) {
-                $scored[] = [
-                    'score' => $score,
-                    'material' => $material,
-                ];
-            }
+        if ($question === '') {
+            return 'Scrivi una domanda prima di inviarla al tutor del corso.';
         }
 
-        usort($scored, function ($a, $b) {
-            return $b['score'] <=> $a['score'];
-        });
-
-        foreach (array_slice($scored, 0, 5) as $item) {
-            $selectedmaterials[] = $item['material'];
+        if (empty($materials)) {
+            return 'Non sono stati trovati materiali del docente rilevanti per rispondere alla domanda. Chiedi al docente di caricare slide, appunti o dispense nella Knowledge Base del corso.';
         }
 
-        if (empty($selectedmaterials)) {
-            $selectedmaterials = array_slice($readablematerials, 0, 5);
+        $context = $this->build_material_context($materials, 2200);
+
+        $prompt = "Sei un tutor AI integrato in Moodle.\n"
+            . "Devi rispondere alla domanda dello studente usando SOLO i materiali del docente forniti sotto.\n"
+            . "Se i materiali non bastano, dillo chiaramente.\n"
+            . "Non inventare informazioni esterne ai materiali.\n"
+            . "Rispondi in italiano.\n"
+            . "Organizza la risposta con sezioni brevi e leggibili.\n"
+            . "Alla fine aggiungi una sezione 'Fonti usate' con i titoli dei materiali usati.\n\n"
+            . "MATERIALI DEL DOCENTE:\n"
+            . $context
+            . "DOMANDA DELLO STUDENTE:\n"
+            . $question;
+
+        return $this->generate($prompt, 1400);
+    }
+
+    public function generate_quiz(string $topic, string $difficulty): string {
+        $topic = trim($topic) !== '' ? trim($topic) : 'Digital Twin';
+        $difficulty = trim($difficulty) !== '' ? trim($difficulty) : 'medium';
+
+        $prompt = "Genera un micro-test universitario in italiano per Moodle.\n\n"
+            . "Argomento: {$topic}\n"
+            . "Difficoltà: {$difficulty}\n\n"
+            . "REGOLE OBBLIGATORIE:\n"
+            . "Rispondi SOLO con JSON valido.\n"
+            . "Non usare Markdown.\n"
+            . "Non usare blocchi ```.\n"
+            . "Non scrivere testo prima o dopo il JSON.\n"
+            . "Genera ESATTAMENTE 3 domande.\n"
+            . "Ogni domanda deve avere ESATTAMENTE 4 opzioni.\n"
+            . "Le spiegazioni devono essere brevi, massimo 180 caratteri.\n\n"
+            . "QUALITÀ E AFFIDABILITÀ:\n"
+            . "Le domande devono essere specifiche, non banali e coerenti con la difficoltà scelta.\n"
+            . "Se la difficoltà è hard, evita domande semplici di memoria come nomi, colori, titoli o protagonisti.\n"
+            . "Se la difficoltà è hard, crea domande che richiedono ragionamento, confronto, interpretazione o applicazione.\n"
+            . "Le opzioni sbagliate devono essere plausibili e vicine alla risposta corretta.\n"
+            . "Non usare opzioni ridicole o palesemente false.\n"
+            . "Non inventare poteri, eventi, relazioni, date, citazioni o motivazioni non confermate.\n"
+            . "Se non sei sicuro di un dettaglio specifico, evita quella domanda e scegli un aspetto più noto del topic.\n"
+            . "Per serie TV, anime, videogiochi, film o lore, genera domande su eventi, temi, personaggi e conflitti chiaramente riconosciuti.\n\n"
+            . $this->quiz_json_format($topic, $difficulty);
+
+        return $this->generate($prompt, 2200);
+    }
+
+    public function generate_quiz_from_course_materials(string $focus, string $difficulty, array $materials): string {
+        $focus = trim($focus);
+        $difficulty = trim($difficulty) !== '' ? trim($difficulty) : 'medium';
+
+        if (empty($materials)) {
+            return $this->generate_quiz($focus !== '' ? $focus : 'Course materials', $difficulty);
         }
+
+        $context = $this->build_material_context($materials, 2600);
+        $topic = $focus !== '' ? $focus : 'Materiali del docente';
+
+        $prompt = "Genera un micro-test universitario in italiano per Moodle usando SOLO i materiali del docente forniti sotto.\n"
+            . "Le domande devono verificare concetti realmente presenti nei materiali.\n"
+            . "Non inventare concetti non presenti.\n"
+            . "Se il focus è specificato, usa il focus solo se compatibile con i materiali.\n\n"
+            . "Focus richiesto dallo studente: {$topic}\n"
+            . "Difficoltà: {$difficulty}\n\n"
+            . "MATERIALI DEL DOCENTE:\n"
+            . $context
+            . "\nREGOLE OBBLIGATORIE:\n"
+            . "Rispondi SOLO con JSON valido.\n"
+            . "Non usare Markdown.\n"
+            . "Non usare blocchi ```.\n"
+            . "Non scrivere testo prima o dopo il JSON.\n"
+            . "Genera ESATTAMENTE 3 domande.\n"
+            . "Ogni domanda deve avere ESATTAMENTE 4 opzioni.\n"
+            . "Le spiegazioni devono essere brevi, massimo 180 caratteri.\n"
+            . "Nel campo skill indica la competenza o concetto del materiale valutato.\n\n"
+            . "QUALITÀ DELLE DOMANDE:\n"
+            . "Le domande devono essere specifiche e basate su dettagli realmente presenti nei materiali.\n"
+            . "Se la difficoltà è hard, genera domande di applicazione, confronto o ragionamento, non semplici definizioni.\n"
+            . "Le opzioni sbagliate devono essere plausibili e vicine alla risposta corretta.\n"
+            . "Non usare concetti esterni ai materiali del docente.\n\n"
+            . $this->quiz_json_format($topic, $difficulty);
+
+        return $this->generate($prompt, 2400);
     }
 
-    if (!empty($selectedmaterials)) {
-        $enhancedquestion = "Domanda dello studente:\n"
-            . $question
-            . "\n\nISTRUZIONI OBBLIGATORIE:\n"
-            . "- Usa SOLO il testo dei materiali forniti.\n"
-            . "- Non dare una risposta generica.\n"
-            . "- Riporta concetti specifici effettivamente presenti nelle slide/materiali.\n"
-            . "- Se devi fare un riassunto, organizza la risposta per punti.\n"
-            . "- Quando possibile, indica da quale fonte deriva il concetto.\n"
-            . "- Se i materiali sono poveri o non bastano, dillo chiaramente.";
+    public function generate_mindmap(string $topic): string {
+        $topic = trim($topic) !== '' ? trim($topic) : 'Digital Twin';
 
-        $service = new real_ai_service();
-        $answer = $service->ask_with_course_materials($enhancedquestion, $selectedmaterials);
+        $prompt = "Genera una mappa mentale didattica semplice e interattiva in italiano.\n\n"
+            . "Argomento centrale: {$topic}\n\n"
+            . "REGOLE OBBLIGATORIE:\n"
+            . "Rispondi SOLO con JSON valido.\n"
+            . "Non usare Markdown.\n"
+            . "Non usare blocchi ```.\n"
+            . "Non scrivere testo prima o dopo il JSON.\n"
+            . "Genera ESATTAMENTE 4 rami principali.\n"
+            . "Ogni ramo deve avere ESATTAMENTE 2 sotto-nodi.\n"
+            . "Ogni titolo deve essere corto: massimo 4 parole.\n"
+            . "Ogni descrizione deve essere chiara: massimo 180 caratteri.\n"
+            . "Non inventare dettagli troppo specifici se non sei sicuro.\n\n"
+            . $this->mindmap_json_format($topic);
+
+        return $this->generate($prompt, 1500);
     }
-}
 
-echo $OUTPUT->header();
+    public function generate_mindmap_from_course_materials(string $focus, array $materials): string {
+        $focus = trim($focus);
 
-echo html_writer::start_div('container-fluid');
+        if (empty($materials)) {
+            return $this->generate_mindmap($focus !== '' ? $focus : 'Course materials');
+        }
 
-echo html_writer::tag('h2', 'Course AI Tutor');
+        $context = $this->build_material_context($materials, 2600);
+        $topic = $focus !== '' ? $focus : 'Materiali del docente';
 
-echo html_writer::tag(
-    'p',
-    'Ask questions about the teacher materials saved in the course knowledge base.',
-    ['class' => 'lead']
-);
+        $prompt = "Genera una mappa mentale didattica semplice e interattiva in italiano usando SOLO i materiali del docente forniti sotto.\n"
+            . "La mappa deve rappresentare i concetti realmente presenti nei materiali.\n"
+            . "Non inventare argomenti non presenti.\n"
+            . "Se il focus è specificato, usalo solo se compatibile con i materiali.\n\n"
+            . "Focus richiesto dallo studente: {$topic}\n\n"
+            . "MATERIALI DEL DOCENTE:\n"
+            . $context
+            . "\nREGOLE OBBLIGATORIE:\n"
+            . "Rispondi SOLO con JSON valido.\n"
+            . "Non usare Markdown.\n"
+            . "Non usare blocchi ```.\n"
+            . "Non scrivere testo prima o dopo il JSON.\n"
+            . "Genera ESATTAMENTE 4 rami principali.\n"
+            . "Ogni ramo deve avere ESATTAMENTE 2 sotto-nodi.\n"
+            . "Ogni titolo deve essere corto: massimo 4 parole.\n"
+            . "Ogni descrizione deve essere chiara: massimo 180 caratteri.\n\n"
+            . $this->mindmap_json_format($topic);
 
-$materialcount = $DB->count_records('local_aiskillnav_material', ['courseid' => $courseid]);
+        return $this->generate($prompt, 1800);
+    }
 
-echo html_writer::div(
-    'Available teacher materials: ' . $materialcount,
-    $materialcount > 0 ? 'alert alert-info' : 'alert alert-warning'
-);
+    public function summarize_course_materials(string $focus, array $materials): string {
+        $focus = trim($focus);
 
-if ($warning !== '') {
-    echo html_writer::div(s($warning), 'alert alert-warning');
-}
+        if (empty($materials)) {
+            return 'Non sono stati trovati materiali leggibili del docente da riassumere.';
+        }
 
-echo html_writer::start_tag('form', [
-    'method' => 'get',
-    'action' => new moodle_url('/local/aiskillnavigator/course_tutor.php'),
-    'class' => 'mb-4',
-]);
+        $context = $this->build_material_context($materials, 3000);
 
-echo html_writer::empty_tag('input', [
-    'type' => 'hidden',
-    'name' => 'courseid',
-    'value' => $courseid,
-]);
+        $prompt = "Riassumi in italiano i materiali del docente forniti sotto.\n"
+            . "Usa SOLO questi materiali.\n"
+            . "Non inventare contenuti esterni.\n"
+            . "Organizza il riassunto con sezioni brevi, elenco dei concetti principali, parole chiave e cosa studiare prima del test.\n";
 
-echo html_writer::start_div('form-group');
+        if ($focus !== '') {
+            $prompt .= "Focus richiesto: {$focus}\n";
+        }
 
-echo html_writer::tag('label', 'Student question', ['for' => 'question']);
+        $prompt .= "\nMATERIALI DEL DOCENTE:\n" . $context;
 
-echo html_writer::empty_tag('input', [
-    'type' => 'text',
-    'name' => 'question',
-    'id' => 'question',
-    'class' => 'form-control',
-    'value' => s($question),
-    'placeholder' => 'Example: Riassumi i concetti principali delle slide caricate dal docente',
-]);
+        return $this->generate($prompt, 1600);
+    }
 
-echo html_writer::end_div();
+    public function generate_xr_scenario(string $topic, string $environment): string {
+        $topic = trim($topic) !== '' ? trim($topic) : 'Digital Twin and IoT';
+        $environment = trim($environment) !== '' ? trim($environment) : 'Smart Factory';
 
-echo html_writer::empty_tag('input', [
-    'type' => 'submit',
-    'class' => 'btn btn-primary mt-2',
-    'value' => 'Ask course AI',
-]);
+        $prompt = "Genera uno scenario formativo per Virtual Worlds in italiano.\n\n"
+            . "Argomento: {$topic}\n"
+            . "Ambiente virtuale: {$environment}\n\n"
+            . "REGOLE:\n"
+            . "Lo scenario deve essere concreto, didattico e adatto a Moodle.\n"
+            . "Se non sei sicuro di dettagli specifici del topic, resta su concetti generali verificabili.\n"
+            . "Usa queste sezioni: titolo, obiettivo didattico, ambiente, storia, task studente, criteri di valutazione, competenze coinvolte.";
 
-echo html_writer::end_tag('form');
+        return $this->generate($prompt, 1400);
+    }
 
-if ($answer !== '') {
-    echo html_writer::start_div('card mt-4');
-    echo html_writer::start_div('card-body ai-answer-card');
+    public function generate_xr_scenario_from_course_materials(string $focus, string $environment, array $materials): string {
+        $focus = trim($focus);
+        $environment = trim($environment) !== '' ? trim($environment) : 'Smart Factory';
 
-    echo html_writer::tag('h3', 'AI answer grounded on teacher materials');
+        if (empty($materials)) {
+            return $this->generate_xr_scenario($focus !== '' ? $focus : 'Digital Twin and IoT', $environment);
+        }
 
-    $formattedanswer = format_text(
-        $answer,
-        FORMAT_MARKDOWN,
-        [
-            'context' => $context,
-            'trusted' => false,
-            'noclean' => false,
-            'filter' => true,
-        ]
-    );
+        $context = $this->build_material_context($materials, 2600);
+        $topic = $focus !== '' ? $focus : 'Materiali del docente';
 
-    echo html_writer::div($formattedanswer, 'ai-answer-content');
+        $prompt = "Genera uno scenario formativo per Virtual Worlds in italiano usando SOLO i materiali del docente forniti sotto.\n"
+            . "Non inventare concetti non presenti nei materiali.\n"
+            . "Se il focus è specificato, usalo solo se compatibile con i materiali.\n\n"
+            . "Focus richiesto: {$topic}\n"
+            . "Ambiente virtuale: {$environment}\n\n"
+            . "MATERIALI DEL DOCENTE:\n"
+            . $context
+            . "\nUsa queste sezioni: titolo, obiettivo didattico, ambiente, storia, task studente, criteri di valutazione, competenze coinvolte, fonti usate.";
 
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-}
+        return $this->generate($prompt, 1600);
+    }
 
-if ($question !== '') {
-    echo html_writer::tag('h3', 'Retrieved sources with extracted text', ['class' => 'mt-4']);
+    private function build_material_context(array $materials, int $limitpermaterial): string {
+        $context = '';
 
-    if (empty($selectedmaterials)) {
-        echo html_writer::div(
-            'No readable source was selected. Check if the uploaded slides contain real selectable text.',
-            'alert alert-warning'
-        );
-    } else {
-        foreach ($selectedmaterials as $material) {
-            $content = (string) ($material->content ?? '');
-            $preview = local_aiskillnavigator_material_preview($content);
+        foreach ($materials as $index => $material) {
+            $number = $index + 1;
+            $title = trim((string) ($material->title ?? 'Materiale senza titolo'));
+            $type = trim((string) ($material->materialtype ?? 'text'));
+            $content = trim((string) ($material->content ?? ''));
 
-            echo html_writer::start_div('card mb-3');
-            echo html_writer::start_div('card-body');
+            $content = trim((string) preg_replace('/\s+/u', ' ', $content));
 
-            echo html_writer::tag('h5', s($material->title));
-            echo html_writer::tag(
-                'p',
-                'Type: ' . s($material->materialtype) . ' | Extracted characters: ' . strlen($content),
-                ['class' => 'text-muted']
-            );
-
-            if ($preview === '') {
-                echo html_writer::div(
-                    'No extracted text available for this source.',
-                    'alert alert-danger'
-                );
-            } else {
-                echo html_writer::tag('pre', s($preview), [
-                    'style' => 'white-space: pre-wrap; max-height: 260px; overflow:auto; background:#f8f9fa; padding:12px; border-radius:8px;',
-                ]);
+            if ($content === '') {
+                continue;
             }
 
-            echo html_writer::end_div();
-            echo html_writer::end_div();
+            if (function_exists('mb_strlen') && mb_strlen($content) > $limitpermaterial) {
+                $content = mb_substr($content, 0, $limitpermaterial) . '...';
+            } else if (strlen($content) > $limitpermaterial) {
+                $content = substr($content, 0, $limitpermaterial) . '...';
+            }
+
+            $context .= "FONTE {$number}\n";
+            $context .= "Titolo: {$title}\n";
+            $context .= "Tipo: {$type}\n";
+            $context .= "Contenuto: {$content}\n\n";
         }
+
+        return $context;
+    }
+
+    private function quiz_json_format(string $topic, string $difficulty): string {
+        return "Formato obbligatorio:\n"
+            . "{\n"
+            . "\"title\":\"Titolo del test\",\n"
+            . "\"topic\":\"{$topic}\",\n"
+            . "\"difficulty\":\"{$difficulty}\",\n"
+            . "\"questions\":[\n"
+            . "{\n"
+            . "\"question\":\"Testo domanda\",\n"
+            . "\"options\":[\"Opzione A\",\"Opzione B\",\"Opzione C\",\"Opzione D\"],\n"
+            . "\"correct_index\":0,\n"
+            . "\"explanation\":\"Spiegazione breve\",\n"
+            . "\"skill\":\"Competenza valutata\"\n"
+            . "}\n"
+            . "]\n"
+            . "}";
+    }
+
+    private function mindmap_json_format(string $topic): string {
+        return "Formato JSON obbligatorio:\n"
+            . "{\n"
+            . "\"title\":\"Titolo corto\",\n"
+            . "\"central_topic\":\"{$topic}\",\n"
+            . "\"summary\":\"Sintesi breve dell'argomento\",\n"
+            . "\"central_description\":\"Spiegazione del concetto centrale\",\n"
+            . "\"branches\":[\n"
+            . "{\n"
+            . "\"title\":\"Ramo principale\",\n"
+            . "\"description\":\"Spiegazione del ramo principale\",\n"
+            . "\"children\":[\n"
+            . "{\"title\":\"Sotto nodo 1\",\"description\":\"Spiegazione del sotto nodo 1\"},\n"
+            . "{\"title\":\"Sotto nodo 2\",\"description\":\"Spiegazione del sotto nodo 2\"}\n"
+            . "]\n"
+            . "}\n"
+            . "]\n"
+            . "}";
+    }
+
+    private function generate(string $prompt, int $maxtokens = 1200): string {
+        if ($this->provider === 'ollama') {
+            return $this->generate_with_ollama($prompt, $maxtokens);
+        }
+
+        return $this->generate_with_openai_compatible_api($prompt, $maxtokens);
+    }
+
+    private function generate_with_ollama(string $prompt, int $maxtokens): string {
+        $endpoint = rtrim($this->endpoint, '/');
+
+        if (str_ends_with($endpoint, '/api/chat')) {
+            $url = $endpoint;
+        } else {
+            $url = $endpoint . '/api/chat';
+        }
+
+        $payload = [
+            'model' => $this->model,
+            'messages' => [
+                [
+                    'role' => 'system',
+                    'content' => 'You are a precise educational assistant integrated into Moodle. Follow the requested output format exactly.',
+                ],
+                [
+                    'role' => 'user',
+                    'content' => $prompt,
+                ],
+            ],
+            'stream' => false,
+            'options' => [
+                'temperature' => 0.2,
+                'num_predict' => $maxtokens,
+            ],
+        ];
+
+        $headers = [
+            'Content-Type: application/json',
+        ];
+
+        return $this->post_json_and_extract_answer($url, $payload, $headers, 'ollama');
+    }
+
+    private function generate_with_openai_compatible_api(string $prompt, int $maxtokens): string {
+        $endpoint = rtrim($this->endpoint, '/');
+
+        if (str_ends_with($endpoint, '/chat/completions')) {
+            $url = $endpoint;
+        } else {
+            $url = $endpoint . '/chat/completions';
+        }
+
+        $payload = [
+            'model' => $this->model,
+            'messages' => [
+                [
+                    'role' => 'system',
+                    'content' => 'You are a precise educational assistant integrated into Moodle. Follow the requested output format exactly.',
+                ],
+                [
+                    'role' => 'user',
+                    'content' => $prompt,
+                ],
+            ],
+            'temperature' => 0.2,
+            'max_tokens' => $maxtokens,
+        ];
+
+        $headers = [
+            'Content-Type: application/json',
+        ];
+
+        if ($this->apikey !== '') {
+            $headers[] = 'Authorization: Bearer ' . $this->apikey;
+        }
+
+        return $this->post_json_and_extract_answer($url, $payload, $headers, 'openai');
+    }
+
+    private function post_json_and_extract_answer(string $url, array $payload, array $headers, string $format): string {
+        $curl = curl_init($url);
+
+        if ($curl === false) {
+            return 'Errore inizializzazione cURL.';
+        }
+
+        $jsonpayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if ($jsonpayload === false) {
+            return 'Errore creazione JSON per la richiesta AI.';
+        }
+
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $jsonpayload,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_CONNECTTIMEOUT => 20,
+            CURLOPT_TIMEOUT => 180,
+            CURLOPT_USERAGENT => 'Moodle local_aiskillnavigator',
+        ]);
+
+        $raw = curl_exec($curl);
+
+        if ($raw === false) {
+            $error = curl_error($curl);
+            curl_close($curl);
+            return 'Errore chiamata AI API: ' . $error;
+        }
+
+        $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+
+        $decoded = json_decode($raw, true);
+
+        if (!is_array($decoded)) {
+            return 'Errore AI API: risposta non JSON. HTTP status: ' . $status . '. Risposta: ' . substr($raw, 0, 500);
+        }
+
+        if ($status >= 400) {
+            $message = $decoded['error'] ?? $decoded['message'] ?? json_encode($decoded, JSON_UNESCAPED_UNICODE);
+            return 'Errore AI API HTTP ' . $status . ': ' . $message;
+        }
+
+        if ($format === 'ollama') {
+            $answer = trim((string) ($decoded['message']['content'] ?? ''));
+        } else {
+            $answer = trim((string) ($decoded['choices'][0]['message']['content'] ?? ''));
+        }
+
+        if ($answer === '') {
+            return 'Errore AI API: risposta valida ma contenuto mancante.';
+        }
+
+        return $this->clean_model_output($answer);
+    }
+
+    private function clean_model_output(string $answer): string {
+        $answer = trim($answer);
+
+        if (str_starts_with($answer, '```json')) {
+            $answer = trim(substr($answer, 7));
+        } else if (str_starts_with($answer, '```')) {
+            $answer = trim(substr($answer, 3));
+        }
+
+        if (str_ends_with($answer, '```')) {
+            $answer = trim(substr($answer, 0, -3));
+        }
+
+        return trim($answer);
     }
 }
-
-echo html_writer::div(
-    html_writer::link(
-        new moodle_url('/local/aiskillnavigator/index.php'),
-        'Back to plugin home',
-        ['class' => 'btn btn-secondary mt-3']
-    )
-);
-
-echo html_writer::end_div();
-
-echo html_writer::tag('style', '
-.ai-answer-content table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-}
-
-.ai-answer-content th,
-.ai-answer-content td {
-    border: 1px solid #d8dee9;
-    padding: 8px 10px;
-}
-
-.ai-answer-content th {
-    background: #f3f6fb;
-}
-
-.ai-answer-content h2,
-.ai-answer-content h3,
-.ai-answer-content h4 {
-    margin-top: 1.2rem;
-}
-
-.ai-answer-card {
-    line-height: 1.55;
-}
-');
-
-echo $OUTPUT->footer();

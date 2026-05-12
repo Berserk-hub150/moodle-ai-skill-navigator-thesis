@@ -5,22 +5,30 @@ require_once(__DIR__ . '/../../config.php');
 
 use local_aiskillnavigator\service\real_ai_service;
 
-require_login();
-
 global $PAGE, $OUTPUT, $DB, $USER;
 
-$context = context_system::instance();
+$courseid = optional_param('courseid', SITEID, PARAM_INT);
+$course = get_course($courseid);
+
+require_login($course);
+
+$context = context_course::instance($courseid);
 
 require_capability('local/aiskillnavigator:viewstudent', $context);
 
 $PAGE->set_context($context);
-$PAGE->set_url(new moodle_url('/local/aiskillnavigator/quizgenerator.php'));
+$PAGE->set_url(new moodle_url('/local/aiskillnavigator/quizgenerator.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('quizgenerator', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('quizgenerator', 'local_aiskillnavigator'));
 
-$courseid = optional_param('courseid', SITEID, PARAM_INT);
-$topic = optional_param('topic', 'Digital Twin', PARAM_TEXT);
+$topic = optional_param('topic', '', PARAM_TEXT);
 $difficulty = optional_param('difficulty', 'medium', PARAM_ALPHA);
+
+// -1 = argomento libero senza materiali.
+//  0 = tutti i materiali leggibili.
+// >0 = singolo materiale selezionato.
+$materialid = optional_param('materialid', -1, PARAM_INT);
+
 $generate = optional_param('generate', 0, PARAM_BOOL);
 $action = optional_param('action', '', PARAM_ALPHA);
 
@@ -30,27 +38,203 @@ $score = null;
 $total = 0;
 $studentanswers = [];
 $savedmessage = '';
+$selectedmaterials = [];
+$parseerror = '';
+
+$materials = $DB->get_records(
+    'local_aiskillnav_material',
+    ['courseid' => $courseid],
+    'timecreated DESC'
+);
+
+$readablematerials = [];
+
+foreach ($materials as $material) {
+    $content = trim((string) ($material->content ?? ''));
+
+    if ($content !== '') {
+        $readablematerials[(int) $material->id] = $material;
+    }
+}
+
+function local_aiskillnavigator_clean_ai_json_response(string $raw): string {
+    $clean = trim($raw);
+
+    $clean = preg_replace('/^```json\s*/i', '', $clean);
+    $clean = preg_replace('/^```\s*/i', '', $clean);
+    $clean = preg_replace('/\s*```$/', '', $clean);
+    $clean = trim($clean);
+
+    $start = strpos($clean, '{');
+
+    if ($start === false) {
+        return '';
+    }
+
+    $clean = substr($clean, $start);
+    $clean = trim($clean);
+
+    $lastbrace = strrpos($clean, '}');
+
+    if ($lastbrace !== false) {
+        $possiblejson = substr($clean, 0, $lastbrace + 1);
+        $decoded = json_decode($possiblejson, true);
+
+        if (is_array($decoded)) {
+            return $possiblejson;
+        }
+    }
+
+    return local_aiskillnavigator_repair_json($clean);
+}
+
+function local_aiskillnavigator_repair_json(string $json): string {
+    $json = trim($json);
+
+    $json = preg_replace('/,\s*([}\]])/', '$1', $json);
+
+    $stack = [];
+    $instring = false;
+    $escaped = false;
+    $length = strlen($json);
+
+    for ($i = 0; $i < $length; $i++) {
+        $char = $json[$i];
+
+        if ($escaped) {
+            $escaped = false;
+            continue;
+        }
+
+        if ($char === '\\' && $instring) {
+            $escaped = true;
+            continue;
+        }
+
+        if ($char === '"') {
+            $instring = !$instring;
+            continue;
+        }
+
+        if ($instring) {
+            continue;
+        }
+
+        if ($char === '{') {
+            $stack[] = '}';
+        } else if ($char === '[') {
+            $stack[] = ']';
+        } else if ($char === '}' || $char === ']') {
+            if (!empty($stack) && end($stack) === $char) {
+                array_pop($stack);
+            }
+        }
+    }
+
+    while (!empty($stack)) {
+        $json .= array_pop($stack);
+    }
+
+    return $json;
+}
 
 function local_aiskillnavigator_extract_quiz_json(string $raw): ?array {
-    $cleanresult = trim($raw);
-    $cleanresult = preg_replace('/^```json\s*/i', '', $cleanresult);
-    $cleanresult = preg_replace('/^```\s*/i', '', $cleanresult);
-    $cleanresult = preg_replace('/\s*```$/', '', $cleanresult);
+    $cleanresult = local_aiskillnavigator_clean_ai_json_response($raw);
 
-    $jsonstart = strpos($cleanresult, '{');
-    $jsonend = strrpos($cleanresult, '}');
-
-    if ($jsonstart !== false && $jsonend !== false && $jsonend > $jsonstart) {
-        $cleanresult = substr($cleanresult, $jsonstart, $jsonend - $jsonstart + 1);
+    if ($cleanresult === '') {
+        return null;
     }
 
     $decoded = json_decode($cleanresult, true);
 
-    if (is_array($decoded) && !empty($decoded['questions']) && is_array($decoded['questions'])) {
-        return $decoded;
+    if (!is_array($decoded)) {
+        return null;
     }
 
-    return null;
+    if (empty($decoded['questions']) || !is_array($decoded['questions'])) {
+        return null;
+    }
+
+    $decoded['questions'] = array_slice(array_values($decoded['questions']), 0, 3);
+
+    foreach ($decoded['questions'] as $index => $question) {
+        if (!is_array($question)) {
+            return null;
+        }
+
+        if (empty($question['question'])) {
+            return null;
+        }
+
+        if (empty($question['options']) || !is_array($question['options'])) {
+            return null;
+        }
+
+        $decoded['questions'][$index]['options'] = array_slice(array_values($question['options']), 0, 4);
+
+        if (count($decoded['questions'][$index]['options']) !== 4) {
+            return null;
+        }
+
+        if (!isset($question['correct_index'])) {
+            $correcttext = '';
+
+            if (!empty($question['correct']) && is_string($question['correct'])) {
+                $correcttext = $question['correct'];
+            } else if (!empty($question['answer']) && is_string($question['answer'])) {
+                $correcttext = $question['answer'];
+            } else if (!empty($question['correct_answer']) && is_string($question['correct_answer'])) {
+                $correcttext = $question['correct_answer'];
+            }
+
+            if ($correcttext !== '') {
+                $foundindex = array_search($correcttext, $decoded['questions'][$index]['options'], true);
+                $decoded['questions'][$index]['correct_index'] = $foundindex !== false ? (int) $foundindex : 0;
+            } else {
+                $decoded['questions'][$index]['correct_index'] = 0;
+            }
+        }
+
+        $correctindex = (int) $decoded['questions'][$index]['correct_index'];
+
+        if ($correctindex < 0 || $correctindex > 3) {
+            $decoded['questions'][$index]['correct_index'] = 0;
+        }
+
+        if (empty($decoded['questions'][$index]['explanation'])) {
+            $decoded['questions'][$index]['explanation'] = 'Risposta corretta secondo il materiale o argomento selezionato.';
+        }
+
+        if (empty($decoded['questions'][$index]['skill'])) {
+            $decoded['questions'][$index]['skill'] = 'Concetto valutato';
+        }
+    }
+
+    if (empty($decoded['title'])) {
+        $decoded['title'] = 'Generated AI test';
+    }
+
+    if (empty($decoded['topic'])) {
+        $decoded['topic'] = 'Argomento generico';
+    }
+
+    if (empty($decoded['difficulty'])) {
+        $decoded['difficulty'] = 'medium';
+    }
+
+    return $decoded;
+}
+
+function local_aiskillnavigator_material_short_title(stdClass $material): string {
+    $title = trim((string) ($material->title ?? 'Materiale senza titolo'));
+
+    if ($title === '') {
+        $title = 'Materiale senza titolo';
+    }
+
+    $contentlength = strlen((string) ($material->content ?? ''));
+
+    return $title . ' (' . $contentlength . ' chars)';
 }
 
 if ($action === 'grade') {
@@ -83,13 +267,13 @@ if ($action === 'grade') {
         $record = new stdClass();
         $record->courseid = $courseid;
         $record->userid = $USER->id;
-        $record->topic = (string) ($quiz['topic'] ?? $topic);
+        $record->topic = (string) ($quiz['topic'] ?? ($topic !== '' ? $topic : 'Argomento generico'));
         $record->difficulty = (string) ($quiz['difficulty'] ?? $difficulty);
         $record->score = $score;
         $record->maxscore = $total;
         $record->percentage = $percentage;
-        $record->quizjson = json_encode($quiz);
-        $record->answersjson = json_encode($studentanswers);
+        $record->quizjson = json_encode($quiz, JSON_UNESCAPED_UNICODE);
+        $record->answersjson = json_encode($studentanswers, JSON_UNESCAPED_UNICODE);
         $record->timecreated = time();
 
         $DB->insert_record('local_aiskillnav_attempt', $record);
@@ -97,9 +281,36 @@ if ($action === 'grade') {
         $savedmessage = 'Quiz attempt saved in the student profile.';
     }
 } else if ($generate) {
+    if ($materialid === -1) {
+        $selectedmaterials = [];
+    } else if ($materialid > 0 && isset($readablematerials[$materialid])) {
+        $selectedmaterials = [$readablematerials[$materialid]];
+    } else {
+        $selectedmaterials = array_values($readablematerials);
+    }
+
     $service = new real_ai_service();
-    $result = $service->generate_quiz($topic, $difficulty);
+
+    if (!empty($selectedmaterials)) {
+        $result = $service->generate_quiz_from_course_materials($topic, $difficulty, $selectedmaterials);
+    } else {
+        $fallbacktopic = $topic !== '' ? $topic : 'Digital Twin';
+        $result = $service->generate_quiz($fallbacktopic, $difficulty);
+    }
+
     $quiz = local_aiskillnavigator_extract_quiz_json($result);
+
+    if ($quiz === null) {
+        $result = !empty($selectedmaterials)
+            ? $service->generate_quiz_from_course_materials($topic, $difficulty, $selectedmaterials)
+            : $service->generate_quiz($topic !== '' ? $topic : 'Digital Twin', $difficulty);
+
+        $quiz = local_aiskillnavigator_extract_quiz_json($result);
+    }
+
+    if ($quiz === null) {
+        $parseerror = 'The AI response could not be parsed as a structured test.';
+    }
 }
 
 echo $OUTPUT->header();
@@ -110,12 +321,30 @@ echo html_writer::tag('h2', get_string('quizgenerator', 'local_aiskillnavigator'
 
 echo html_writer::tag(
     'p',
-    'Generate an AI micro-quiz, let the student answer it, and save the score in Moodle.',
+    'Generate an AI micro-quiz from a generic topic or from teacher materials, answer it, and save the score in Moodle.',
     ['class' => 'lead']
+);
+
+echo html_writer::tag(
+    'p',
+    'Course: ' . s($course->fullname),
+    ['class' => 'text-muted']
 );
 
 if ($savedmessage !== '') {
     echo html_writer::div(s($savedmessage), 'alert alert-success');
+}
+
+if (empty($readablematerials)) {
+    echo html_writer::div(
+        'No readable teacher materials found yet. You can still generate a quiz from a manual topic.',
+        'alert alert-warning'
+    );
+} else {
+    echo html_writer::div(
+        'Readable teacher materials available: ' . count($readablematerials) . '. You can generate a quiz from a generic topic or directly from teacher materials.',
+        'alert alert-info'
+    );
 }
 
 echo html_writer::start_div('card mb-4');
@@ -141,18 +370,62 @@ echo html_writer::empty_tag('input', [
 ]);
 
 echo html_writer::start_div('form-group');
-echo html_writer::tag('label', get_string('quiz_topic', 'local_aiskillnavigator'), ['for' => 'topic']);
+
+echo html_writer::tag('label', 'Generation source', ['for' => 'materialid']);
+
+$materialoptions = [
+    -1 => 'Manual topic only (do not use teacher materials)',
+    0 => 'All readable teacher materials',
+];
+
+foreach ($readablematerials as $material) {
+    $materialoptions[(int) $material->id] = local_aiskillnavigator_material_short_title($material);
+}
+
+echo html_writer::select(
+    $materialoptions,
+    'materialid',
+    $materialid,
+    false,
+    [
+        'class' => 'form-control',
+        'id' => 'materialid',
+    ]
+);
+
+echo html_writer::tag(
+    'small',
+    'Choose "Manual topic only" for any generic topic. Choose teacher materials only when you want the quiz grounded on uploaded materials.',
+    ['class' => 'form-text text-muted']
+);
+
+echo html_writer::end_div();
+
+echo html_writer::start_div('form-group mt-3');
+
+echo html_writer::tag('label', 'Topic or optional focus', ['for' => 'topic']);
+
 echo html_writer::empty_tag('input', [
     'type' => 'text',
     'name' => 'topic',
     'id' => 'topic',
     'class' => 'form-control',
     'value' => s($topic),
+    'placeholder' => 'Example: CSS, One Piece, Digital Twin, cybersecurity...',
 ]);
+
+echo html_writer::tag(
+    'small',
+    'With manual topic mode this is the quiz topic. With teacher materials mode this is only an optional focus inside the selected materials.',
+    ['class' => 'form-text text-muted']
+);
+
 echo html_writer::end_div();
 
 echo html_writer::start_div('form-group mt-3');
+
 echo html_writer::tag('label', 'Difficulty', ['for' => 'difficulty']);
+
 echo html_writer::select(
     [
         'easy' => 'Easy',
@@ -167,12 +440,13 @@ echo html_writer::select(
         'id' => 'difficulty',
     ]
 );
+
 echo html_writer::end_div();
 
 echo html_writer::empty_tag('input', [
     'type' => 'submit',
     'class' => 'btn btn-primary mt-3',
-    'value' => 'Generate test with AI',
+    'value' => 'Generate test',
 ]);
 
 echo html_writer::end_tag('form');
@@ -181,23 +455,46 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 
 if ($quiz !== null) {
-    $quizjson = json_encode($quiz);
+    $quizjson = json_encode($quiz, JSON_UNESCAPED_UNICODE);
     $encodedquiz = base64_encode($quizjson);
 
     echo html_writer::start_div('card mt-4 mb-4');
     echo html_writer::start_div('card-body');
 
     echo html_writer::tag('h3', s($quiz['title'] ?? 'Generated AI test'));
+
     echo html_writer::tag(
         'p',
-        'Topic: ' . s($quiz['topic'] ?? $topic) . ' | Difficulty: ' . s($quiz['difficulty'] ?? $difficulty),
+        'Topic: ' . s($quiz['topic'] ?? ($topic !== '' ? $topic : 'Argomento generico')) .
+        ' | Difficulty: ' . s($quiz['difficulty'] ?? $difficulty),
         ['class' => 'text-muted']
     );
+
+    if (!empty($selectedmaterials)) {
+        $sourcenames = [];
+
+        foreach ($selectedmaterials as $material) {
+            $sourcenames[] = $material->title;
+        }
+
+        echo html_writer::tag(
+            'p',
+            'Generated from teacher materials: ' . s(implode(', ', $sourcenames)),
+            ['class' => 'text-muted']
+        );
+    } else {
+        echo html_writer::tag(
+            'p',
+            'Generated from manual topic, without teacher materials.',
+            ['class' => 'text-muted']
+        );
+    }
 
     if ($score !== null) {
         $percentage = $total > 0 ? round(($score / $total) * 100) : 0;
 
         $alertclass = 'alert-danger';
+
         if ($percentage >= 80) {
             $alertclass = 'alert-success';
         } else if ($percentage >= 50) {
@@ -251,8 +548,14 @@ if ($quiz !== null) {
 
     echo html_writer::empty_tag('input', [
         'type' => 'hidden',
+        'name' => 'materialid',
+        'value' => $materialid,
+    ]);
+
+    echo html_writer::empty_tag('input', [
+        'type' => 'hidden',
         'name' => 'quizdata',
-        'value' => s($encodedquiz),
+        'value' => $encodedquiz,
     ]);
 
     foreach ($quiz['questions'] as $index => $question) {
@@ -276,6 +579,7 @@ if ($quiz !== null) {
                     'id' => $inputid,
                     'value' => $optionindex,
                     'class' => 'mr-2',
+                    'required' => 'required',
                 ];
 
                 if ($selectedanswer !== null && (int) $selectedanswer === (int) $optionindex) {
@@ -303,21 +607,30 @@ if ($quiz !== null) {
 
                 echo html_writer::start_div('form-check mb-2');
                 echo html_writer::empty_tag('input', $attributes);
+
                 echo html_writer::tag('label', $labeltext, [
                     'for' => $inputid,
                     'class' => 'form-check-label',
                 ]);
+
                 echo html_writer::end_div();
             }
         }
 
         if ($score !== null) {
             if (!empty($question['skill'])) {
-                echo html_writer::tag('p', html_writer::tag('strong', 'Skill: ') . s($question['skill']), ['class' => 'mt-3']);
+                echo html_writer::tag(
+                    'p',
+                    html_writer::tag('strong', 'Skill: ') . s($question['skill']),
+                    ['class' => 'mt-3']
+                );
             }
 
             if (!empty($question['explanation'])) {
-                echo html_writer::tag('p', html_writer::tag('strong', 'Explanation: ') . s($question['explanation']));
+                echo html_writer::tag(
+                    'p',
+                    html_writer::tag('strong', 'Explanation: ') . s($question['explanation'])
+                );
             }
         }
 
@@ -337,6 +650,7 @@ if ($quiz !== null) {
                 'generate' => 1,
                 'topic' => $topic,
                 'difficulty' => $difficulty,
+                'materialid' => $materialid,
                 'courseid' => $courseid,
             ]),
             'Generate another test',
@@ -347,17 +661,19 @@ if ($quiz !== null) {
     echo html_writer::end_tag('form');
 } else if ($result !== '') {
     echo html_writer::start_div('alert alert-warning mt-4');
-    echo html_writer::tag('h4', 'The AI response could not be parsed as a structured test.');
+    echo html_writer::tag('h4', s($parseerror !== '' ? $parseerror : 'The AI response could not be parsed as a structured test.'));
     echo html_writer::tag('p', 'Raw response:');
+
     echo html_writer::tag('pre', s($result), [
         'style' => 'white-space: pre-wrap; font-family: inherit;',
     ]);
+
     echo html_writer::end_div();
 }
 
 echo html_writer::div(
     html_writer::link(
-        new moodle_url('/local/aiskillnavigator/index.php'),
+        new moodle_url('/local/aiskillnavigator/index.php', ['courseid' => $courseid]),
         'Back to plugin home',
         ['class' => 'btn btn-secondary mt-3']
     ),
