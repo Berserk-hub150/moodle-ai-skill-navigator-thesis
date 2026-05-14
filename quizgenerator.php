@@ -3,6 +3,7 @@
 
 require_once(__DIR__ . '/../../config.php');
 
+use local_aiskillnavigator\service\embedding_service;
 use local_aiskillnavigator\service\real_ai_service;
 
 global $PAGE, $OUTPUT, $DB, $USER;
@@ -40,6 +41,9 @@ $studentanswers = [];
 $savedmessage = '';
 $selectedmaterials = [];
 $parseerror = '';
+$warning = '';
+$ragdebug = '';
+$ragsources = [];
 
 $materials = $DB->get_records(
     'local_aiskillnav_material',
@@ -56,6 +60,9 @@ foreach ($materials as $material) {
         $readablematerials[(int) $material->id] = $material;
     }
 }
+
+$embeddingservice = new embedding_service();
+$totalchunks = $embeddingservice->count_indexed_chunks($courseid);
 
 function local_aiskillnavigator_clean_ai_json_response(string $raw): string {
     $clean = trim($raw);
@@ -291,7 +298,31 @@ if ($action === 'grade') {
 
     $service = new real_ai_service();
 
-    if (!empty($selectedmaterials)) {
+    if ($materialid === -1) {
+        $fallbacktopic = $topic !== '' ? $topic : 'Digital Twin';
+        $result = $service->generate_quiz($fallbacktopic, $difficulty);
+    } else if ($totalchunks > 0) {
+        $searchquery = $topic !== '' ? $topic : 'quiz based on course materials';
+        $searchmaterialid = $materialid > 0 ? $materialid : 0;
+        $results = $embeddingservice->search($searchquery, $courseid, 6, $searchmaterialid);
+
+        if (!empty($results)) {
+            $ragcontext = $embeddingservice->build_context($results, 6500);
+            $result = $service->generate_quiz_with_rag_context($topic, $difficulty, $ragcontext);
+            $ragdebug = count($results) . ' RAG chunks retrieved, top similarity: ' . $results[0]->similarity;
+
+            foreach ($results as $ragresult) {
+                $ragsources[$ragresult->title . ' — chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
+            }
+        } else if (!empty($selectedmaterials)) {
+            $warning = 'No RAG chunks found for this focus. Falling back to full material context.';
+            $result = $service->generate_quiz_from_course_materials($topic, $difficulty, $selectedmaterials);
+        } else {
+            $warning = 'No RAG chunks found. Falling back to manual topic generation.';
+            $result = $service->generate_quiz($topic !== '' ? $topic : 'Digital Twin', $difficulty);
+        }
+    } else if (!empty($selectedmaterials)) {
+        $warning = 'Teacher materials exist but are not indexed for RAG yet. Falling back to full material context.';
         $result = $service->generate_quiz_from_course_materials($topic, $difficulty, $selectedmaterials);
     } else {
         $fallbacktopic = $topic !== '' ? $topic : 'Digital Twin';
@@ -301,9 +332,17 @@ if ($action === 'grade') {
     $quiz = local_aiskillnavigator_extract_quiz_json($result);
 
     if ($quiz === null) {
-        $result = !empty($selectedmaterials)
-            ? $service->generate_quiz_from_course_materials($topic, $difficulty, $selectedmaterials)
-            : $service->generate_quiz($topic !== '' ? $topic : 'Digital Twin', $difficulty);
+        if ($materialid !== -1 && $totalchunks > 0) {
+            $searchquery = $topic !== '' ? $topic : 'quiz based on course materials';
+            $searchmaterialid = $materialid > 0 ? $materialid : 0;
+            $results = $embeddingservice->search($searchquery, $courseid, 6, $searchmaterialid);
+            $ragcontext = $embeddingservice->build_context($results, 6500);
+            $result = $service->generate_quiz_with_rag_context($topic, $difficulty, $ragcontext);
+        } else {
+            $result = !empty($selectedmaterials)
+                ? $service->generate_quiz_from_course_materials($topic, $difficulty, $selectedmaterials)
+                : $service->generate_quiz($topic !== '' ? $topic : 'Digital Twin', $difficulty);
+        }
 
         $quiz = local_aiskillnavigator_extract_quiz_json($result);
     }
@@ -321,7 +360,7 @@ echo html_writer::tag('h2', get_string('quizgenerator', 'local_aiskillnavigator'
 
 echo html_writer::tag(
     'p',
-    'Generate an AI micro-quiz from a generic topic or from teacher materials, answer it, and save the score in Moodle.',
+    'Generate an AI micro-quiz from a generic topic or from teacher materials. In RAG mode, the quiz is grounded on the most relevant indexed chunks.',
     ['class' => 'lead']
 );
 
@@ -335,15 +374,24 @@ if ($savedmessage !== '') {
     echo html_writer::div(s($savedmessage), 'alert alert-success');
 }
 
-if (empty($readablematerials)) {
+if ($warning !== '') {
+    echo html_writer::div(s($warning), 'alert alert-warning');
+}
+
+if ($totalchunks > 0) {
+    echo html_writer::div(
+        'RAG index active: ' . $totalchunks . ' chunks indexed. Quiz generation can use semantic retrieval.',
+        'alert alert-success'
+    );
+} else if (empty($readablematerials)) {
     echo html_writer::div(
         'No readable teacher materials found yet. You can still generate a quiz from a manual topic.',
         'alert alert-warning'
     );
 } else {
     echo html_writer::div(
-        'Readable teacher materials available: ' . count($readablematerials) . '. You can generate a quiz from a generic topic or directly from teacher materials.',
-        'alert alert-info'
+        'Readable teacher materials available: ' . count($readablematerials) . ', but no RAG chunks are indexed yet. Re-index materials from Teacher Materials.',
+        'alert alert-warning'
     );
 }
 
@@ -375,11 +423,12 @@ echo html_writer::tag('label', 'Generation source', ['for' => 'materialid']);
 
 $materialoptions = [
     -1 => 'Manual topic only (do not use teacher materials)',
-    0 => 'All readable teacher materials',
+    0 => 'RAG semantic search (all course materials)',
 ];
 
 foreach ($readablematerials as $material) {
-    $materialoptions[(int) $material->id] = local_aiskillnavigator_material_short_title($material);
+    $chunks = $embeddingservice->count_indexed_chunks($courseid, (int) $material->id);
+    $materialoptions[(int) $material->id] = local_aiskillnavigator_material_short_title($material) . ' — RAG chunks: ' . $chunks;
 }
 
 echo html_writer::select(
@@ -395,7 +444,7 @@ echo html_writer::select(
 
 echo html_writer::tag(
     'small',
-    'Choose "Manual topic only" for any generic topic. Choose teacher materials only when you want the quiz grounded on uploaded materials.',
+    'Choose "Manual topic only" for any generic topic. Choose RAG mode when you want the quiz grounded on indexed teacher materials.',
     ['class' => 'form-text text-muted']
 );
 
@@ -470,7 +519,23 @@ if ($quiz !== null) {
         ['class' => 'text-muted']
     );
 
-    if (!empty($selectedmaterials)) {
+    if (!empty($ragsources)) {
+        echo html_writer::tag('p', 'Generated with RAG semantic retrieval:', ['class' => 'text-muted mb-1']);
+        echo html_writer::start_tag('ul', ['class' => 'text-muted small']);
+
+        foreach ($ragsources as $title => $similarity) {
+            echo html_writer::tag(
+                'li',
+                s($title) . ' ' . html_writer::tag('span', 'similarity: ' . $similarity, ['class' => 'badge badge-info'])
+            );
+        }
+
+        echo html_writer::end_tag('ul');
+
+        if ($ragdebug !== '') {
+            echo html_writer::tag('p', s($ragdebug), ['class' => 'text-muted small']);
+        }
+    } else if (!empty($selectedmaterials)) {
         $sourcenames = [];
 
         foreach ($selectedmaterials as $material) {

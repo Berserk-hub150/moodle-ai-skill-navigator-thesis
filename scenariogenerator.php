@@ -3,6 +3,7 @@
 
 require_once(__DIR__ . '/../../config.php');
 
+use local_aiskillnavigator\service\embedding_service;
 use local_aiskillnavigator\service\real_ai_service;
 
 global $PAGE, $OUTPUT, $DB;
@@ -35,6 +36,8 @@ $result = '';
 $selectedmaterials = [];
 $warning = '';
 $debugmessage = '';
+$ragdebug = '';
+$ragsources = [];
 
 function local_aiskillnavigator_scenario_material_short_title(stdClass $material): string {
     $title = trim((string) ($material->title ?? 'Materiale senza titolo'));
@@ -82,6 +85,9 @@ function local_aiskillnavigator_scenario_select_materials(array $readablemateria
     return array_values($readablematerials);
 }
 
+$embeddingservice = new embedding_service();
+$totalchunks = $embeddingservice->count_indexed_chunks($courseid);
+
 $readablematerials = local_aiskillnavigator_scenario_get_readable_materials($courseid);
 $selectedmaterials = local_aiskillnavigator_scenario_select_materials($readablematerials, $materialid);
 
@@ -91,12 +97,33 @@ if ($generate === 1) {
     if ($materialid === -1) {
         $debugmessage = 'Generation triggered in manual topic mode.';
         $result = $service->generate_xr_scenario($topic, $environment);
+    } else if ($totalchunks > 0) {
+        $debugmessage = 'Generation triggered in RAG teacher materials mode.';
+        $searchquery = $topic !== '' ? $topic : 'virtual learning scenario based on course materials';
+        $searchmaterialid = $materialid > 0 ? $materialid : 0;
+        $results = $embeddingservice->search($searchquery, $courseid, 6, $searchmaterialid);
+
+        if (!empty($results)) {
+            $ragcontext = $embeddingservice->build_context($results, 7500);
+            $result = $service->generate_xr_scenario_with_rag_context($topic, $environment, $ragcontext);
+            $ragdebug = count($results) . ' RAG chunks retrieved, top similarity: ' . $results[0]->similarity;
+
+            foreach ($results as $ragresult) {
+                $ragsources[$ragresult->title . ' — chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
+            }
+        } else if (empty($selectedmaterials)) {
+            $warning = 'Non sono stati trovati chunk RAG per questo focus. Usa Manual topic only oppure carica materiali in Teacher Materials.';
+        } else {
+            $warning = 'No RAG chunks found for this focus. Falling back to full material context.';
+            $result = $service->generate_xr_scenario_from_course_materials($topic, $environment, $selectedmaterials);
+        }
     } else {
-        $debugmessage = 'Generation triggered in teacher materials mode.';
+        $debugmessage = 'Generation triggered in teacher materials mode without RAG index.';
 
         if (empty($selectedmaterials)) {
             $warning = 'Non sono stati trovati materiali leggibili del docente. Usa Manual topic only oppure carica materiali in Teacher Materials.';
         } else {
+            $warning = 'Teacher materials exist but are not indexed for RAG yet. Falling back to full material context.';
             $result = $service->generate_xr_scenario_from_course_materials($topic, $environment, $selectedmaterials);
         }
     }
@@ -114,7 +141,7 @@ echo html_writer::tag('h2', get_string('scenariogenerator', 'local_aiskillnaviga
 
 echo html_writer::tag(
     'p',
-    'Generate Virtual Worlds training scenarios from a manual topic or from teacher materials.',
+    'Generate Virtual Worlds training scenarios from a manual topic or from RAG-retrieved teacher material chunks.',
     ['class' => 'lead']
 );
 
@@ -124,15 +151,20 @@ echo html_writer::tag(
     ['class' => 'text-muted']
 );
 
-if (empty($readablematerials)) {
+if ($totalchunks > 0) {
+    echo html_writer::div(
+        'RAG index active: ' . $totalchunks . ' chunks indexed. Scenario generation can use semantic retrieval.',
+        'alert alert-success'
+    );
+} else if (empty($readablematerials)) {
     echo html_writer::div(
         'No readable teacher materials found yet. You can still generate scenarios from a manual topic.',
         'alert alert-warning'
     );
 } else {
     echo html_writer::div(
-        'Readable teacher materials available: ' . count($readablematerials) . '.',
-        'alert alert-info'
+        'Readable teacher materials available: ' . count($readablematerials) . ', but no RAG chunks are indexed yet. Re-index materials from Teacher Materials.',
+        'alert alert-warning'
     );
 }
 
@@ -168,11 +200,12 @@ echo html_writer::tag('label', 'Generation source', ['for' => 'materialid']);
 
 $materialoptions = [
     -1 => 'Manual topic only (do not use teacher materials)',
-    0 => 'All readable teacher materials',
+    0 => 'RAG semantic search (all course materials)',
 ];
 
 foreach ($readablematerials as $material) {
-    $materialoptions[(int) $material->id] = local_aiskillnavigator_scenario_material_short_title($material);
+    $chunks = $embeddingservice->count_indexed_chunks($courseid, (int) $material->id);
+    $materialoptions[(int) $material->id] = local_aiskillnavigator_scenario_material_short_title($material) . ' — RAG chunks: ' . $chunks;
 }
 
 echo html_writer::select(
@@ -188,7 +221,7 @@ echo html_writer::select(
 
 echo html_writer::tag(
     'small',
-    'Choose Manual topic only for any generic scenario, or choose teacher materials for a grounded course scenario.',
+    'Choose Manual topic only for any generic scenario, or choose RAG mode for a grounded course scenario based on indexed material chunks.',
     ['class' => 'form-text text-muted']
 );
 
@@ -255,7 +288,23 @@ if ($result !== '') {
 
     echo html_writer::tag('h3', 'Generated scenario');
 
-    if (!empty($selectedmaterials)) {
+    if (!empty($ragsources)) {
+        echo html_writer::tag('p', 'Generated with RAG semantic retrieval:', ['class' => 'text-muted mb-1']);
+        echo html_writer::start_tag('ul', ['class' => 'text-muted small']);
+
+        foreach ($ragsources as $title => $similarity) {
+            echo html_writer::tag(
+                'li',
+                s($title) . ' ' . html_writer::tag('span', 'similarity: ' . $similarity, ['class' => 'badge badge-info'])
+            );
+        }
+
+        echo html_writer::end_tag('ul');
+
+        if ($ragdebug !== '') {
+            echo html_writer::tag('p', s($ragdebug), ['class' => 'text-muted small']);
+        }
+    } else if (!empty($selectedmaterials)) {
         $sourcenames = [];
 
         foreach ($selectedmaterials as $material) {
