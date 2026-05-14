@@ -2,6 +2,7 @@
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/material_source_helper.php');
 
 use local_aiskillnavigator\service\embedding_service;
 use local_aiskillnavigator\service\real_ai_service;
@@ -89,19 +90,26 @@ $embeddingservice = new embedding_service();
 $totalchunks = $embeddingservice->count_indexed_chunks($courseid);
 
 $readablematerials = local_aiskillnavigator_scenario_get_readable_materials($courseid);
-$selectedmaterials = local_aiskillnavigator_scenario_select_materials($readablematerials, $materialid);
+
+$sourcemode = local_aiskillnavigator_material_source_mode_from_request(-1);
+$selectedmaterialids = local_aiskillnavigator_material_source_selected_ids_from_request($readablematerials);
+$selectedmaterials = local_aiskillnavigator_material_source_selected_materials($readablematerials, $sourcemode, $selectedmaterialids);
+$materialid = local_aiskillnavigator_material_source_legacy_materialid($sourcemode, $selectedmaterialids);
+
+if ($sourcemode === 'selected' && empty($selectedmaterialids)) {
+    $warning = 'Select at least one teacher material or switch to all course materials.';
+}
 
 if ($generate === 1) {
     $service = new real_ai_service();
 
-    if ($materialid === -1) {
+    if ($sourcemode === 'manual') {
         $debugmessage = 'Generation triggered in manual topic mode.';
         $result = $service->generate_xr_scenario($topic, $environment);
     } else if ($totalchunks > 0) {
         $debugmessage = 'Generation triggered in RAG teacher materials mode.';
         $searchquery = $topic !== '' ? $topic : 'virtual learning scenario based on course materials';
-        $searchmaterialid = $materialid > 0 ? $materialid : 0;
-        $results = $embeddingservice->search($searchquery, $courseid, 6, $searchmaterialid);
+        $results = local_aiskillnavigator_material_source_search($embeddingservice, $searchquery, $courseid, 6, $sourcemode, $selectedmaterialids);
 
         if (!empty($results)) {
             $ragcontext = $embeddingservice->build_context($results, 7500);
@@ -195,36 +203,15 @@ echo html_writer::empty_tag('input', [
 ]);
 
 echo html_writer::start_div('form-group');
-
-echo html_writer::tag('label', 'Generation source', ['for' => 'materialid']);
-
-$materialoptions = [
-    -1 => 'Manual topic only (do not use teacher materials)',
-    0 => 'RAG semantic search (all course materials)',
-];
-
-foreach ($readablematerials as $material) {
-    $chunks = $embeddingservice->count_indexed_chunks($courseid, (int) $material->id);
-    $materialoptions[(int) $material->id] = local_aiskillnavigator_scenario_material_short_title($material) . ' â€” RAG chunks: ' . $chunks;
-}
-
-echo html_writer::select(
-    $materialoptions,
-    'materialid',
-    $materialid,
-    false,
-    [
-        'class' => 'form-control',
-        'id' => 'materialid',
-    ]
+echo local_aiskillnavigator_material_source_selector_html(
+    $readablematerials,
+    $embeddingservice,
+    $courseid,
+    $sourcemode,
+    $selectedmaterialids,
+    'Generation source',
+    'Choose Manual topic only for a generic scenario, all materials for full RAG search, or selected materials to generate the scenario only from specific uploaded files.'
 );
-
-echo html_writer::tag(
-    'small',
-    'Choose Manual topic only for any generic scenario, or choose RAG mode for a grounded course scenario based on indexed material chunks.',
-    ['class' => 'form-text text-muted']
-);
-
 echo html_writer::end_div();
 
 echo html_writer::start_div('form-group mt-3');
