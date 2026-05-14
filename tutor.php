@@ -2,6 +2,7 @@
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/material_source_helper.php');
 
 use local_aiskillnavigator\service\embedding_service;
 use local_aiskillnavigator\service\real_ai_service;
@@ -47,25 +48,29 @@ foreach ($materials as $material) {
     }
 }
 
-if ($materialid > 0 && !isset($readablematerials[$materialid])) {
-    $materialid = 0;
-    $warning = 'Selected material not found. RAG search was switched to all course materials.';
-}
-
 $embeddingservice = new embedding_service();
 $totalchunks = $embeddingservice->count_indexed_chunks($courseid);
-$selectedchunkcount = $materialid > 0 ? $embeddingservice->count_indexed_chunks($courseid, $materialid) : $totalchunks;
+
+$sourcemode = local_aiskillnavigator_material_source_mode_from_request(-1);
+$selectedmaterialids = local_aiskillnavigator_material_source_selected_ids_from_request($readablematerials);
+$selectedmaterials = local_aiskillnavigator_material_source_selected_materials($readablematerials, $sourcemode, $selectedmaterialids);
+$selectedchunkcount = local_aiskillnavigator_material_source_count_chunks($embeddingservice, $courseid, $sourcemode, $selectedmaterialids);
+$materialid = local_aiskillnavigator_material_source_legacy_materialid($sourcemode, $selectedmaterialids);
+
+if ($sourcemode === 'selected' && empty($selectedmaterialids)) {
+    $warning = 'Select at least one teacher material or switch to all course materials.';
+}
 
 if ($question !== '') {
     $aiservice = new real_ai_service();
 
-    if ($materialid === -1) {
+    if ($sourcemode === 'manual') {
         $answer = $aiservice->ask_tutor($question);
     } else if ($selectedchunkcount === 0) {
         $warning = 'Non ci sono chunk RAG indicizzati per questa sorgente. '
             . 'Chiedi al docente di usare “Re-index for RAG” in Teacher Materials oppure usa General AI.';
     } else {
-        $results = $embeddingservice->search($question, $courseid, 5, $materialid > 0 ? $materialid : 0);
+        $results = local_aiskillnavigator_material_source_search($embeddingservice, $question, $courseid, 5, $sourcemode, $selectedmaterialids);
 
         if (empty($results)) {
             $warning = 'Nessun chunk rilevante trovato nel RAG index. Prova a riformulare la domanda o usa General AI.';
@@ -135,35 +140,15 @@ echo html_writer::empty_tag('input', [
 ]);
 
 echo html_writer::start_div('form-group');
-echo html_writer::tag('label', 'Answer source', ['for' => 'materialid']);
-
-$materialoptions = [
-    -1 => 'General AI only (do not use teacher materials)',
-    0 => 'RAG semantic search (all course materials)',
-];
-
-foreach ($readablematerials as $material) {
-    $chunks = $embeddingservice->count_indexed_chunks($courseid, (int) $material->id);
-    $materialoptions[(int) $material->id] = $material->title . ' — RAG chunks: ' . $chunks;
-}
-
-echo html_writer::select(
-    $materialoptions,
-    'materialid',
-    $materialid,
-    false,
-    [
-        'class' => 'form-control',
-        'id' => 'materialid',
-    ]
+echo local_aiskillnavigator_material_source_selector_html(
+    $readablematerials,
+    $embeddingservice,
+    $courseid,
+    $sourcemode,
+    $selectedmaterialids,
+    'Answer source',
+    'General AI answers freely. RAG mode searches indexed teacher materials. Use selected materials to ground the answer only on specific uploaded files.'
 );
-
-echo html_writer::tag(
-    'small',
-    'General AI answers freely. RAG mode searches indexed teacher materials and uses only the retrieved chunks as context.',
-    ['class' => 'form-text text-muted']
-);
-
 echo html_writer::end_div();
 
 echo html_writer::start_div('form-group mt-3');
@@ -195,7 +180,7 @@ if ($answer !== '') {
     echo html_writer::start_div('card mt-4');
     echo html_writer::start_div('card-body ai-answer-card');
 
-    if ($materialid === -1) {
+    if ($sourcemode === 'manual') {
         echo html_writer::tag('h3', 'AI answer from general model');
         echo html_writer::tag('p', 'Generated from general AI, without teacher materials.', ['class' => 'text-muted']);
     } else {
