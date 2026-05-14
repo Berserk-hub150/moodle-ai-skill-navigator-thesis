@@ -2,6 +2,7 @@
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/material_source_helper.php');
 
 use local_aiskillnavigator\service\embedding_service;
 use local_aiskillnavigator\service\real_ai_service;
@@ -57,6 +58,15 @@ foreach ($materials as $material) {
 
 $embeddingservice = new embedding_service();
 $totalchunks = $embeddingservice->count_indexed_chunks($courseid);
+
+$sourcemode = local_aiskillnavigator_material_source_mode_from_request(-1);
+$selectedmaterialids = local_aiskillnavigator_material_source_selected_ids_from_request($readablematerials);
+$selectedmaterials = local_aiskillnavigator_material_source_selected_materials($readablematerials, $sourcemode, $selectedmaterialids);
+$materialid = local_aiskillnavigator_material_source_legacy_materialid($sourcemode, $selectedmaterialids);
+
+if ($sourcemode === 'selected' && empty($selectedmaterialids)) {
+    $warning = 'Select at least one teacher material or switch to all course materials.';
+}
 
 function local_aiskillnavigator_clean_ai_json_response(string $raw): string {
     $clean = trim($raw);
@@ -270,23 +280,16 @@ function local_aiskillnavigator_material_short_title(stdClass $material): string
 }
 
 if ($generate) {
-    if ($materialid === -1) {
-        $selectedmaterials = [];
-    } else if ($materialid > 0 && isset($readablematerials[$materialid])) {
-        $selectedmaterials = [$readablematerials[$materialid]];
-    } else {
-        $selectedmaterials = array_values($readablematerials);
-    }
+    $selectedmaterials = local_aiskillnavigator_material_source_selected_materials($readablematerials, $sourcemode, $selectedmaterialids);
 
     $service = new real_ai_service();
 
-    if ($materialid === -1) {
+    if ($sourcemode === 'manual') {
         $fallbacktopic = $topic !== '' ? $topic : 'Digital Twin';
         $result = $service->generate_mindmap($fallbacktopic);
     } else if ($totalchunks > 0) {
         $searchquery = $topic !== '' ? $topic : 'concept map based on course materials';
-        $searchmaterialid = $materialid > 0 ? $materialid : 0;
-        $results = $embeddingservice->search($searchquery, $courseid, 6, $searchmaterialid);
+        $results = local_aiskillnavigator_material_source_search($embeddingservice, $searchquery, $courseid, 6, $sourcemode, $selectedmaterialids);
 
         if (!empty($results)) {
             $ragcontext = $embeddingservice->build_context($results, 6500);
@@ -314,10 +317,9 @@ if ($generate) {
     $mindmap = local_aiskillnavigator_extract_json($result);
 
     if ($mindmap === null) {
-        if ($materialid !== -1 && $totalchunks > 0) {
+        if ($sourcemode !== 'manual' && $totalchunks > 0) {
             $searchquery = $topic !== '' ? $topic : 'concept map based on course materials';
-            $searchmaterialid = $materialid > 0 ? $materialid : 0;
-            $results = $embeddingservice->search($searchquery, $courseid, 6, $searchmaterialid);
+        $results = local_aiskillnavigator_material_source_search($embeddingservice, $searchquery, $courseid, 6, $sourcemode, $selectedmaterialids);
             $ragcontext = $embeddingservice->build_context($results, 6500);
             $result = $service->generate_mindmap_with_rag_context($topic, $ragcontext);
         } else {
@@ -396,36 +398,15 @@ echo html_writer::empty_tag('input', [
 ]);
 
 echo html_writer::start_div('form-group');
-
-echo html_writer::tag('label', 'Generation source', ['for' => 'materialid']);
-
-$materialoptions = [
-    -1 => 'Manual topic only (do not use teacher materials)',
-    0 => 'RAG semantic search (all course materials)',
-];
-
-foreach ($readablematerials as $material) {
-    $chunks = $embeddingservice->count_indexed_chunks($courseid, (int) $material->id);
-    $materialoptions[(int) $material->id] = local_aiskillnavigator_material_short_title($material) . ' — RAG chunks: ' . $chunks;
-}
-
-echo html_writer::select(
-    $materialoptions,
-    'materialid',
-    $materialid,
-    false,
-    [
-        'class' => 'form-control',
-        'id' => 'materialid',
-    ]
+echo local_aiskillnavigator_material_source_selector_html(
+    $readablematerials,
+    $embeddingservice,
+    $courseid,
+    $sourcemode,
+    $selectedmaterialids,
+    'Generation source',
+    'Choose Manual topic only for a generic map, all materials for full RAG search, or selected materials to build the mind map only from specific uploaded files.'
 );
-
-echo html_writer::tag(
-    'small',
-    'Choose Manual topic only for any generic topic, or choose RAG mode when you want the mind map grounded on indexed teacher materials.',
-    ['class' => 'form-text text-muted']
-);
-
 echo html_writer::end_div();
 
 echo html_writer::start_div('form-group mt-3');
