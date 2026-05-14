@@ -46,6 +46,14 @@ $settings->add(new admin_setting_configtext(
     PARAM_TEXT
 ));
 
+$settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/embeddingmodel',
+    'Embedding model',
+    'Model used for RAG embeddings. For Ollama: nomic-embed-text (recommended). For OpenAI: text-embedding-3-small.',
+    'nomic-embed-text',
+    PARAM_TEXT
+));
+
 $settings->add(new admin_setting_configpasswordunmask(
     'local_aiskillnavigator/apikey',
     get_string('apikey', 'local_aiskillnavigator'),
