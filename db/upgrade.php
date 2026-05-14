@@ -62,5 +62,32 @@ function xmldb_local_aiskillnavigator_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026051003, 'local', 'aiskillnavigator');
     }
 
+    if ($oldversion < 2026051401) {
+        $table = new xmldb_table('local_aiskillnav_chunk');
+
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('materialid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('title', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('chunkindex', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('chunktext', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
+            $table->add_field('embedding', XMLDB_TYPE_TEXT, null, null, null, null, null);
+            $table->add_field('embeddingmodel', XMLDB_TYPE_CHAR, '100', null, null, null, null);
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_index('materialid_ix', XMLDB_INDEX_NOTUNIQUE, ['materialid']);
+            $table->add_index('courseid_ix', XMLDB_INDEX_NOTUNIQUE, ['courseid']);
+
+            $dbman->create_table($table);
+        }
+
+        // IMPORTANT: do not generate embeddings during plugin upgrade.
+        // Indexing calls external AI/embedding services and can timeout or fail.
+        // Existing materials are re-indexed manually from teacher_materials.php.
+        upgrade_plugin_savepoint(true, 2026051401, 'local', 'aiskillnavigator');
+    }
+
     return true;
 }
