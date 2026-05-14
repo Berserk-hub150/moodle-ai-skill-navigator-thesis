@@ -109,7 +109,7 @@ if ($generate === 1) {
             $ragdebug = count($results) . ' RAG chunks retrieved, top similarity: ' . $results[0]->similarity;
 
             foreach ($results as $ragresult) {
-                $ragsources[$ragresult->title . ' — chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
+                $ragsources[$ragresult->title . ' â€” chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
             }
         } else if (empty($selectedmaterials)) {
             $warning = 'Non sono stati trovati chunk RAG per questo focus. Usa Manual topic only oppure carica materiali in Teacher Materials.';
@@ -129,7 +129,7 @@ if ($generate === 1) {
     }
 
     if (trim($result) === '' && $warning === '') {
-        $warning = 'La generazione è partita, ma il servizio AI ha restituito una risposta vuota.';
+        $warning = 'La generazione Ã¨ partita, ma il servizio AI ha restituito una risposta vuota.';
     }
 }
 
@@ -205,7 +205,7 @@ $materialoptions = [
 
 foreach ($readablematerials as $material) {
     $chunks = $embeddingservice->count_indexed_chunks($courseid, (int) $material->id);
-    $materialoptions[(int) $material->id] = local_aiskillnavigator_scenario_material_short_title($material) . ' — RAG chunks: ' . $chunks;
+    $materialoptions[(int) $material->id] = local_aiskillnavigator_scenario_material_short_title($material) . ' â€” RAG chunks: ' . $chunks;
 }
 
 echo html_writer::select(
@@ -377,3 +377,5 @@ echo html_writer::tag('style', '
 ');
 
 echo $OUTPUT->footer();
+
+
