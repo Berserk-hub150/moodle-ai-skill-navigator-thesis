@@ -69,6 +69,172 @@ class real_ai_service {
         return $this->generate($prompt, 1400);
     }
 
+    /**
+     * RAG-aware tutor: uses pre-retrieved context from embedding_service.
+     *
+     * @param string $question Student question.
+     * @param string $ragcontext Pre-built context from embedding_service->build_context().
+     * @return string AI answer.
+     */
+    public function ask_with_rag_context(string $question, string $ragcontext): string {
+        $question = trim($question);
+
+        if ($question === '') {
+            return 'Scrivi una domanda prima di inviarla al tutor del corso.';
+        }
+
+        if ($ragcontext === '') {
+            return 'Non sono stati trovati materiali rilevanti nel RAG index per rispondere alla domanda.';
+        }
+
+        $prompt = "Sei un tutor AI integrato in Moodle con accesso a una Knowledge Base indicizzata.\n"
+            . "I materiali sotto sono stati selezionati semanticamente come i più rilevanti per la domanda.\n"
+            . "Rispondi SOLO usando questi materiali. Se non bastano, dillo chiaramente.\n"
+            . "Non inventare informazioni esterne ai materiali.\n"
+            . "Rispondi in italiano.\n"
+            . "Organizza la risposta con sezioni brevi e leggibili.\n"
+            . "Alla fine aggiungi una sezione 'Fonti usate' con i titoli dei materiali citati.\n\n"
+            . "MATERIALI RILEVANTI (recuperati via RAG):\n"
+            . $ragcontext
+            . "DOMANDA DELLO STUDENTE:\n"
+            . $question;
+
+        return $this->generate($prompt, 1400);
+    }
+
+    /**
+     * RAG-aware quiz generation: uses pre-retrieved context from embedding_service.
+     */
+    public function generate_quiz_with_rag_context(string $focus, string $difficulty, string $ragcontext): string {
+        $focus = trim($focus);
+        $difficulty = trim($difficulty) !== '' ? trim($difficulty) : 'medium';
+
+        if ($ragcontext === '') {
+            return $this->generate_quiz($focus !== '' ? $focus : 'Course materials', $difficulty);
+        }
+
+        $topic = $focus !== '' ? $focus : 'Materiali del docente';
+
+        $prompt = "Genera un micro-test universitario in italiano per Moodle usando SOLO i materiali forniti sotto.\n"
+            . "I materiali sono stati selezionati semanticamente come i più rilevanti per il focus richiesto.\n"
+            . "Le domande devono verificare concetti realmente presenti nei materiali.\n"
+            . "Non inventare concetti non presenti.\n\n"
+            . "Focus richiesto: {$topic}\n"
+            . "Difficoltà: {$difficulty}\n\n"
+            . "MATERIALI RILEVANTI (recuperati via RAG):\n"
+            . $ragcontext
+            . "\nREGOLE OBBLIGATORIE:\n"
+            . "Rispondi SOLO con JSON valido.\n"
+            . "Non usare Markdown.\n"
+            . "Non usare blocchi ```.\n"
+            . "Non scrivere testo prima o dopo il JSON.\n"
+            . "Genera ESATTAMENTE 3 domande.\n"
+            . "Ogni domanda deve avere ESATTAMENTE 4 opzioni.\n"
+            . "Le spiegazioni devono essere brevi, massimo 180 caratteri.\n"
+            . "Nel campo skill indica la competenza o concetto del materiale valutato.\n\n"
+            . "QUALITÀ DELLE DOMANDE:\n"
+            . "Le domande devono essere specifiche e basate su dettagli realmente presenti nei materiali.\n"
+            . "Se la difficoltà è hard, genera domande di applicazione, confronto o ragionamento.\n"
+            . "Le opzioni sbagliate devono essere plausibili e vicine alla risposta corretta.\n\n"
+            . $this->quiz_json_format($topic, $difficulty);
+
+        return $this->generate($prompt, 2400);
+    }
+
+    /**
+     * RAG-aware mind map generation.
+     */
+    public function generate_mindmap_with_rag_context(string $focus, string $ragcontext): string {
+        $focus = trim($focus);
+
+        if ($ragcontext === '') {
+            return $this->generate_mindmap($focus !== '' ? $focus : 'Course materials');
+        }
+
+        $topic = $focus !== '' ? $focus : 'Materiali del docente';
+
+        $prompt = "Genera una mappa mentale didattica in italiano usando SOLO i materiali forniti sotto.\n"
+            . "I materiali sono stati selezionati semanticamente come i più rilevanti.\n"
+            . "La mappa deve rappresentare i concetti realmente presenti nei materiali.\n"
+            . "Non inventare argomenti non presenti.\n\n"
+            . "Focus richiesto: {$topic}\n\n"
+            . "MATERIALI RILEVANTI (recuperati via RAG):\n"
+            . $ragcontext
+            . "\nREGOLE OBBLIGATORIE:\n"
+            . "Rispondi SOLO con JSON valido.\n"
+            . "Non usare Markdown.\n"
+            . "Non usare blocchi ```.\n"
+            . "Non scrivere testo prima o dopo il JSON.\n"
+            . "Genera ESATTAMENTE 4 rami principali.\n"
+            . "Ogni ramo deve avere ESATTAMENTE 2 sotto-nodi.\n"
+            . "Ogni titolo deve essere corto: massimo 4 parole.\n"
+            . "Ogni descrizione deve essere chiara: massimo 180 caratteri.\n\n"
+            . $this->mindmap_json_format($topic);
+
+        return $this->generate($prompt, 1800);
+    }
+
+    /**
+     * RAG-aware XR scenario generation.
+     */
+    public function generate_xr_scenario_with_rag_context(string $focus, string $environment, string $ragcontext): string {
+        $focus = trim($focus);
+        $environment = trim($environment) !== '' ? trim($environment) : 'Smart Factory';
+
+        if ($ragcontext === '') {
+            return $this->generate_xr_scenario($focus !== '' ? $focus : 'Digital Twin and IoT', $environment);
+        }
+
+        $topic = $focus !== '' ? $focus : 'Materiali del docente';
+
+        $prompt = "Genera uno scenario formativo completo per Virtual Worlds in italiano usando SOLO i materiali forniti.\n"
+            . "I materiali sono stati selezionati semanticamente come i più rilevanti.\n"
+            . "Non inventare concetti non presenti nei materiali.\n\n"
+            . "Focus richiesto: {$topic}\n"
+            . "Ambiente virtuale: {$environment}\n\n"
+            . "MATERIALI RILEVANTI (recuperati via RAG):\n"
+            . $ragcontext
+            . "\nREGOLE OBBLIGATORIE:\n"
+            . "- Genera uno scenario lungo, concreto e usabile in una demo Moodle.\n"
+            . "- Non fermarti al titolo.\n"
+            . "- Usa ESATTAMENTE le sezioni indicate sotto.\n"
+            . "- Ogni sezione deve avere contenuto reale.\n"
+            . "- I task studente devono essere almeno 5.\n"
+            . "- I criteri di valutazione devono essere almeno 4.\n"
+            . "- Le competenze coinvolte devono essere almeno 4.\n"
+            . "- Alla fine indica le fonti usate con i titoli dei materiali.\n\n"
+            . "FORMATO OBBLIGATORIO:\n"
+            . "# Titolo\n## Obiettivo didattico\n## Ambiente virtuale\n"
+            . "## Storia dello scenario\n## Task dello studente\n"
+            . "## Criteri di valutazione\n## Competenze coinvolte\n## Fonti usate\n";
+
+        return $this->generate($prompt, 3000);
+    }
+
+    /**
+     * RAG-aware material summarization.
+     */
+    public function summarize_with_rag_context(string $focus, string $ragcontext): string {
+        if ($ragcontext === '') {
+            return 'Non sono stati trovati materiali rilevanti nel RAG index da riassumere.';
+        }
+
+        $prompt = "Riassumi in italiano i materiali forniti sotto.\n"
+            . "I materiali sono stati selezionati semanticamente come i più rilevanti.\n"
+            . "Usa SOLO questi materiali. Non inventare contenuti esterni.\n"
+            . "Organizza il riassunto con sezioni brevi, concetti principali, parole chiave e cosa studiare.\n";
+
+        $focus = trim($focus);
+
+        if ($focus !== '') {
+            $prompt .= "Focus richiesto: {$focus}\n";
+        }
+
+        $prompt .= "\nMATERIALI RILEVANTI (recuperati via RAG):\n" . $ragcontext;
+
+        return $this->generate($prompt, 1600);
+    }
+
     public function generate_quiz(string $topic, string $difficulty): string {
         $topic = trim($topic) !== '' ? trim($topic) : 'Digital Twin';
         $difficulty = trim($difficulty) !== '' ? trim($difficulty) : 'medium';
