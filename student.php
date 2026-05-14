@@ -205,7 +205,7 @@ echo html_writer::tag('p', s($recommendation));
 
 echo html_writer::div(
     html_writer::link(
-        new moodle_url('/local/aiskillnavigator/course_tutor.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/tutor.php', ['courseid' => $courseid]),
         'Ask Course AI Tutor',
         ['class' => 'btn btn-primary mr-2']
     ) .

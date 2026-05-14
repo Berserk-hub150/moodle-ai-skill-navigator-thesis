@@ -81,7 +81,7 @@ if ($canstudent) {
     echo html_writer::tag('h4', 'Course AI Tutor', ['class' => 'card-title']);
     echo html_writer::tag('p', 'Ask questions grounded on the teacher materials saved in the course knowledge base.', ['class' => 'card-text']);
     echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/course_tutor.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/tutor.php', ['courseid' => $courseid]),
         'Open Course Tutor',
         ['class' => 'btn btn-primary']
     );
