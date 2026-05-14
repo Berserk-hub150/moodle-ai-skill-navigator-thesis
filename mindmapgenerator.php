@@ -3,6 +3,7 @@
 
 require_once(__DIR__ . '/../../config.php');
 
+use local_aiskillnavigator\service\embedding_service;
 use local_aiskillnavigator\service\real_ai_service;
 
 global $PAGE, $OUTPUT, $DB;
@@ -33,6 +34,9 @@ $generate = optional_param('generate', 0, PARAM_BOOL);
 $result = '';
 $mindmap = null;
 $parseerror = '';
+$warning = '';
+$ragdebug = '';
+$ragsources = [];
 $selectedmaterials = [];
 
 $materials = $DB->get_records(
@@ -50,6 +54,9 @@ foreach ($materials as $material) {
         $readablematerials[(int) $material->id] = $material;
     }
 }
+
+$embeddingservice = new embedding_service();
+$totalchunks = $embeddingservice->count_indexed_chunks($courseid);
 
 function local_aiskillnavigator_clean_ai_json_response(string $raw): string {
     $clean = trim($raw);
@@ -273,7 +280,31 @@ if ($generate) {
 
     $service = new real_ai_service();
 
-    if (!empty($selectedmaterials)) {
+    if ($materialid === -1) {
+        $fallbacktopic = $topic !== '' ? $topic : 'Digital Twin';
+        $result = $service->generate_mindmap($fallbacktopic);
+    } else if ($totalchunks > 0) {
+        $searchquery = $topic !== '' ? $topic : 'concept map based on course materials';
+        $searchmaterialid = $materialid > 0 ? $materialid : 0;
+        $results = $embeddingservice->search($searchquery, $courseid, 6, $searchmaterialid);
+
+        if (!empty($results)) {
+            $ragcontext = $embeddingservice->build_context($results, 6500);
+            $result = $service->generate_mindmap_with_rag_context($topic, $ragcontext);
+            $ragdebug = count($results) . ' RAG chunks retrieved, top similarity: ' . $results[0]->similarity;
+
+            foreach ($results as $ragresult) {
+                $ragsources[$ragresult->title . ' — chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
+            }
+        } else if (!empty($selectedmaterials)) {
+            $warning = 'No RAG chunks found for this focus. Falling back to full material context.';
+            $result = $service->generate_mindmap_from_course_materials($topic, $selectedmaterials);
+        } else {
+            $warning = 'No RAG chunks found. Falling back to manual topic generation.';
+            $result = $service->generate_mindmap($topic !== '' ? $topic : 'Digital Twin');
+        }
+    } else if (!empty($selectedmaterials)) {
+        $warning = 'Teacher materials exist but are not indexed for RAG yet. Falling back to full material context.';
         $result = $service->generate_mindmap_from_course_materials($topic, $selectedmaterials);
     } else {
         $fallbacktopic = $topic !== '' ? $topic : 'Digital Twin';
@@ -283,9 +314,17 @@ if ($generate) {
     $mindmap = local_aiskillnavigator_extract_json($result);
 
     if ($mindmap === null) {
-        $result = !empty($selectedmaterials)
-            ? $service->generate_mindmap_from_course_materials($topic, $selectedmaterials)
-            : $service->generate_mindmap($topic !== '' ? $topic : 'Digital Twin');
+        if ($materialid !== -1 && $totalchunks > 0) {
+            $searchquery = $topic !== '' ? $topic : 'concept map based on course materials';
+            $searchmaterialid = $materialid > 0 ? $materialid : 0;
+            $results = $embeddingservice->search($searchquery, $courseid, 6, $searchmaterialid);
+            $ragcontext = $embeddingservice->build_context($results, 6500);
+            $result = $service->generate_mindmap_with_rag_context($topic, $ragcontext);
+        } else {
+            $result = !empty($selectedmaterials)
+                ? $service->generate_mindmap_from_course_materials($topic, $selectedmaterials)
+                : $service->generate_mindmap($topic !== '' ? $topic : 'Digital Twin');
+        }
 
         $mindmap = local_aiskillnavigator_extract_json($result);
     }
@@ -303,7 +342,7 @@ echo html_writer::tag('h2', get_string('mindmapgenerator', 'local_aiskillnavigat
 
 echo html_writer::tag(
     'p',
-    'Generate a readable draggable AI mind map from a manual topic or from teacher materials. Click a node to read more information.',
+    'Generate a readable draggable AI mind map from a manual topic or from RAG-retrieved teacher material chunks. Click a node to read more information.',
     ['class' => 'lead']
 );
 
@@ -313,15 +352,24 @@ echo html_writer::tag(
     ['class' => 'text-muted']
 );
 
-if (empty($readablematerials)) {
+if ($warning !== '') {
+    echo html_writer::div(s($warning), 'alert alert-warning');
+}
+
+if ($totalchunks > 0) {
+    echo html_writer::div(
+        'RAG index active: ' . $totalchunks . ' chunks indexed. Mind map generation can use semantic retrieval.',
+        'alert alert-success'
+    );
+} else if (empty($readablematerials)) {
     echo html_writer::div(
         'No readable teacher materials found yet. The mind map can still be generated from a manual topic.',
         'alert alert-warning'
     );
 } else {
     echo html_writer::div(
-        'Readable teacher materials available: ' . count($readablematerials) . '. You can generate a mind map from a manual topic or from these materials.',
-        'alert alert-info'
+        'Readable teacher materials available: ' . count($readablematerials) . ', but no RAG chunks are indexed yet. Re-index materials from Teacher Materials.',
+        'alert alert-warning'
     );
 }
 
@@ -353,11 +401,12 @@ echo html_writer::tag('label', 'Generation source', ['for' => 'materialid']);
 
 $materialoptions = [
     -1 => 'Manual topic only (do not use teacher materials)',
-    0 => 'All readable teacher materials',
+    0 => 'RAG semantic search (all course materials)',
 ];
 
 foreach ($readablematerials as $material) {
-    $materialoptions[(int) $material->id] = local_aiskillnavigator_material_short_title($material);
+    $chunks = $embeddingservice->count_indexed_chunks($courseid, (int) $material->id);
+    $materialoptions[(int) $material->id] = local_aiskillnavigator_material_short_title($material) . ' — RAG chunks: ' . $chunks;
 }
 
 echo html_writer::select(
@@ -373,7 +422,7 @@ echo html_writer::select(
 
 echo html_writer::tag(
     'small',
-    'Choose Manual topic only for any generic topic, or choose teacher materials when you want the mind map grounded on uploaded materials.',
+    'Choose Manual topic only for any generic topic, or choose RAG mode when you want the mind map grounded on indexed teacher materials.',
     ['class' => 'form-text text-muted']
 );
 
@@ -419,6 +468,27 @@ if ($parseerror !== '') {
     echo html_writer::tag('pre', s($result), [
         'style' => 'white-space: pre-wrap; max-height: 220px; overflow:auto;',
     ]);
+    echo html_writer::end_div();
+}
+
+if ($mindmap !== null && !empty($ragsources)) {
+    echo html_writer::start_div('alert alert-info mt-4');
+    echo html_writer::tag('h4', 'RAG sources used');
+    echo html_writer::start_tag('ul', ['class' => 'mb-1']);
+
+    foreach ($ragsources as $title => $similarity) {
+        echo html_writer::tag(
+            'li',
+            s($title) . ' ' . html_writer::tag('span', 'similarity: ' . $similarity, ['class' => 'badge badge-info'])
+        );
+    }
+
+    echo html_writer::end_tag('ul');
+
+    if ($ragdebug !== '') {
+        echo html_writer::tag('p', s($ragdebug), ['class' => 'mb-0 small']);
+    }
+
     echo html_writer::end_div();
 }
 
