@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Moodle-Plugin-orange">
   <img src="https://img.shields.io/badge/PHP-8%2B-blue">
-  <img src="https://img.shields.io/badge/AI-Ollama%20%7C%20OpenAI-green">
+  <img src="https://img.shields.io/badge/AI-DeepSeek%20API%20%7C%20OpenAI--compatible-green">
   <img src="https://img.shields.io/badge/Status-Thesis%20Prototype-purple">
 </p>
 AI Skill Navigator is an AI-powered Moodle local plugin developed as a thesis prototype for AI-supported learning inside a university LMS.
@@ -155,21 +155,24 @@ http://localhost:8080/local/aiskillnavigator/scenariogenerator.php?courseid=1
 
 Supported provider names include:
 
-- `ollama`;
+- `deepseek`;
 - `openai`;
 - `openai_compatible`;
 - `openrouter`;
+- `ollama`;
 - `prototype`;
 - `mock`;
 - `demo`.
 
-Default development configuration:
+Current demo configuration:
 
 | Setting | Value |
 |---|---|
-| Provider | `ollama` |
-| Endpoint | `http://host.docker.internal:11434` |
-| Model | `qwen2.5:3b` |
+| Provider | `deepseek` |
+| Endpoint | DeepSeek API endpoint configured in Moodle settings |
+| Model | DeepSeek chat model configured in Moodle settings |
+
+The plugin does not store API keys in the repository. Provider credentials must be configured through Moodle/plugin settings or local environment configuration.
 
 ## Roadmap
 
@@ -184,3 +187,4 @@ Default development configuration:
 ## Status
 
 This repository contains an academic thesis prototype focused on feasibility, architecture, extensibility and software quality improvements.
+
