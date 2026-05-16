@@ -1,5 +1,19 @@
-# AI Skill Navigator
+﻿# AI Skill Navigator
 
+<p align="center">
+  <img src="assets/readme/hero-banner.png" alt="AI Skill Navigator banner" width="100%">
+</p>
+
+<p align="center">
+  AI-powered Moodle plugin for tutoring, quizzes, mind maps, XR scenarios and teacher analytics.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Moodle-Plugin-orange">
+  <img src="https://img.shields.io/badge/PHP-8%2B-blue">
+  <img src="https://img.shields.io/badge/AI-Ollama%20%7C%20OpenAI-green">
+  <img src="https://img.shields.io/badge/Status-Thesis%20Prototype-purple">
+</p>
 AI Skill Navigator is an AI-powered Moodle local plugin developed as a thesis prototype for AI-supported learning inside a university LMS.
 
 It adds tutoring, course-material-grounded assistance, quiz generation, mind map generation, XR scenario generation and teacher-oriented analytics to Moodle.
