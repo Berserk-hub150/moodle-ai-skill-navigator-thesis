@@ -1,11 +1,5 @@
 <?php
 // This file is part of Moodle - https://moodle.org/
-//
-// Backward-compatible entry point for old links.
-// The real AI tutor page is tutor.php.
+// Compatibility wrapper: the page implementation is kept in pages/course_tutor.php.
 
-require_once(__DIR__ . '/../../config.php');
-
-$courseid = optional_param('courseid', SITEID, PARAM_INT);
-
-redirect(new moodle_url('/local/aiskillnavigator/tutor.php', ['courseid' => $courseid]));
+require_once(__DIR__ . '/pages/course_tutor.php');

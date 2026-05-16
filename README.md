@@ -182,11 +182,55 @@ API keys are not stored in the repository. Credentials must be configured throug
 Ollama remains supported as an optional local provider, but it is not the default provider for the current demo.
 
 
+
+## Plugin structure
+
+The root PHP files are lightweight Moodle-compatible wrappers.
+
+The main implementation is organised as follows:
+
+```text
+pages/
+  Moodle page implementations
+
+includes/
+  shared page helpers
+
+assets/css/
+  plugin stylesheets
+
+classes/service/
+  AI providers, prompt builders, workflow facade and services
+```
+
+This keeps public Moodle URLs stable while making the repository structure easier to navigate.
 ## Project documentation
 
 - [Roadmap](docs/ROADMAP.md)
 - [Release notes](docs/RELEASE_NOTES.md)
 - [Contributing guide](.github/CONTRIBUTING.md)
+
+## Plugin structure
+
+The root PHP files are lightweight Moodle-compatible wrappers.
+
+The main implementation is organised as follows:
+
+```text
+pages/
+  Moodle page implementations
+
+includes/
+  shared page helpers
+
+assets/css/
+  plugin stylesheets
+
+classes/service/
+  AI providers, prompt builders, workflow facade and services
+```
+
+This keeps public Moodle URLs stable while making the repository structure easier to navigate.
 ## Roadmap
 
 - Add real screenshot gallery.
@@ -198,14 +242,59 @@ Ollama remains supported as an optional local provider, but it is not the defaul
 - Add automated tests for provider factory and prompt builder.
 
 
+
+## Plugin structure
+
+The root PHP files are lightweight Moodle-compatible wrappers.
+
+The main implementation is organised as follows:
+
+```text
+pages/
+  Moodle page implementations
+
+includes/
+  shared page helpers
+
+assets/css/
+  plugin stylesheets
+
+classes/service/
+  AI providers, prompt builders, workflow facade and services
+```
+
+This keeps public Moodle URLs stable while making the repository structure easier to navigate.
 ## Project documentation
 
 - [Roadmap](docs/ROADMAP.md)
 - [Release notes](docs/RELEASE_NOTES.md)
 - [Contributing guide](.github/CONTRIBUTING.md)
+
+## Plugin structure
+
+The root PHP files are lightweight Moodle-compatible wrappers.
+
+The main implementation is organised as follows:
+
+```text
+pages/
+  Moodle page implementations
+
+includes/
+  shared page helpers
+
+assets/css/
+  plugin stylesheets
+
+classes/service/
+  AI providers, prompt builders, workflow facade and services
+```
+
+This keeps public Moodle URLs stable while making the repository structure easier to navigate.
 ## Status
 
 This repository contains an academic thesis prototype focused on feasibility, architecture, extensibility and software quality improvements.
+
 
 
 
