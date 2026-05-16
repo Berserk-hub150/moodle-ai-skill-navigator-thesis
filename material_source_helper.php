@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // This file is part of Moodle - https://moodle.org/
 
 defined('MOODLE_INTERNAL') || die();
@@ -279,3 +279,270 @@ function local_aiskillnavigator_material_source_footer_script(): string {
 })();
 ');
 }
+
+
+if (!function_exists('local_aiskillnavigator_material_source_mode_from_request')) {
+    function local_aiskillnavigator_material_source_mode_from_request(int $defaultmaterialid = -1): string {
+        $sourcemode = optional_param('sourcemode', '', PARAM_ALPHA);
+
+        if (in_array($sourcemode, ['manual', 'all', 'selected'], true)) {
+            return $sourcemode;
+        }
+
+        $legacyid = optional_param('materialid', $defaultmaterialid, PARAM_INT);
+
+        if ($legacyid === 0) {
+            return 'all';
+        }
+
+        if ($legacyid > 0) {
+            return 'selected';
+        }
+
+        return 'manual';
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_selected_ids_from_request')) {
+    function local_aiskillnavigator_material_source_selected_ids_from_request(array $readablematerials): array {
+        $ids = optional_param_array('materialids', [], PARAM_INT);
+        $legacyid = optional_param('materialid', -1, PARAM_INT);
+
+        if (empty($ids) && $legacyid > 0) {
+            $ids = [$legacyid];
+        }
+
+        $clean = [];
+
+        foreach ($ids as $id) {
+            $id = (int) $id;
+
+            if ($id <= 0) {
+                continue;
+            }
+
+            if (!empty($readablematerials) && !array_key_exists($id, $readablematerials)) {
+                continue;
+            }
+
+            $clean[$id] = $id;
+        }
+
+        return array_values($clean);
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_selected_materials')) {
+    function local_aiskillnavigator_material_source_selected_materials(
+        array $readablematerials,
+        string $sourcemode,
+        array $materialids
+    ): array {
+        if ($sourcemode === 'manual') {
+            return [];
+        }
+
+        if ($sourcemode === 'all') {
+            return array_values($readablematerials);
+        }
+
+        $selected = [];
+
+        foreach ($materialids as $id) {
+            $id = (int) $id;
+
+            if (isset($readablematerials[$id])) {
+                $selected[$id] = $readablematerials[$id];
+            }
+        }
+
+        return array_values($selected);
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_legacy_materialid')) {
+    function local_aiskillnavigator_material_source_legacy_materialid(string $sourcemode, array $materialids): int {
+        if ($sourcemode === 'all') {
+            return 0;
+        }
+
+        if ($sourcemode === 'selected' && !empty($materialids)) {
+            return (int) array_values($materialids)[0];
+        }
+
+        return -1;
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_count_chunks')) {
+    function local_aiskillnavigator_material_source_count_chunks(
+        \local_aiskillnavigator\service\embedding_service $embeddingservice,
+        int $courseid,
+        string $sourcemode,
+        array $materialids
+    ): int {
+        if ($sourcemode === 'manual') {
+            return 0;
+        }
+
+        if ($sourcemode === 'all') {
+            return $embeddingservice->count_indexed_chunks($courseid);
+        }
+
+        $total = 0;
+
+        foreach ($materialids as $materialid) {
+            $total += $embeddingservice->count_indexed_chunks($courseid, (int) $materialid);
+        }
+
+        return $total;
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_search_rag')) {
+    function local_aiskillnavigator_material_source_search_rag(
+        \local_aiskillnavigator\service\embedding_service $embeddingservice,
+        string $query,
+        int $courseid,
+        string $sourcemode,
+        array $materialids,
+        int $topk
+    ): array {
+        if ($sourcemode === 'manual') {
+            return [];
+        }
+
+        if ($sourcemode === 'all') {
+            return $embeddingservice->search($query, $courseid, $topk, 0);
+        }
+
+        $merged = [];
+
+        foreach ($materialids as $materialid) {
+            $results = $embeddingservice->search($query, $courseid, $topk, (int) $materialid);
+
+            foreach ($results as $result) {
+                $key = (int) ($result->id ?? 0);
+
+                if ($key <= 0) {
+                    $key = crc32(($result->title ?? '') . ($result->chunkindex ?? '') . ($result->chunktext ?? ''));
+                }
+
+                $merged[$key] = $result;
+            }
+        }
+
+        $merged = array_values($merged);
+
+        usort($merged, function ($a, $b) {
+            return ((float) ($b->similarity ?? 0)) <=> ((float) ($a->similarity ?? 0));
+        });
+
+        return array_slice($merged, 0, $topk);
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_short_title')) {
+    function local_aiskillnavigator_material_source_short_title(stdClass $material): string {
+        $title = trim((string) ($material->title ?? 'Materiale senza titolo'));
+
+        if ($title === '') {
+            $title = 'Materiale senza titolo';
+        }
+
+        $contentlength = strlen((string) ($material->content ?? ''));
+
+        return $title . ' (' . $contentlength . ' chars)';
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_selector_html')) {
+    function local_aiskillnavigator_material_source_selector_html(
+        array $readablematerials,
+        \local_aiskillnavigator\service\embedding_service $embeddingservice,
+        int $courseid,
+        string $sourcemode,
+        array $materialids,
+        string $label = 'Generation source',
+        string $helptext = ''
+    ): string {
+        if (function_exists('local_aiskillnavigator_material_source_render_controls')) {
+            return local_aiskillnavigator_material_source_render_controls(
+                $readablematerials,
+                $embeddingservice,
+                $courseid,
+                $sourcemode,
+                $materialids,
+                $label,
+                'Manual topic only (do not use teacher materials)',
+                'All teacher materials',
+                'Selected teacher materials only',
+                $helptext
+            );
+        }
+
+        $html = '';
+
+        $html .= html_writer::start_div('form-group');
+        $html .= html_writer::tag('label', $label, ['for' => 'sourcemode']);
+        $html .= html_writer::select(
+            [
+                'manual' => 'Manual topic only (do not use teacher materials)',
+                'all' => 'All teacher materials',
+                'selected' => 'Selected teacher materials only',
+            ],
+            'sourcemode',
+            $sourcemode,
+            false,
+            [
+                'class' => 'form-control',
+                'id' => 'sourcemode',
+            ]
+        );
+
+        if ($helptext !== '') {
+            $html .= html_writer::tag('small', $helptext, ['class' => 'form-text text-muted']);
+        }
+
+        $html .= html_writer::end_div();
+
+        return $html;
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_hidden_inputs')) {
+    function local_aiskillnavigator_material_source_hidden_inputs(string $sourcemode, array $materialids): string {
+        if (function_exists('local_aiskillnavigator_material_source_hidden_fields')) {
+            return local_aiskillnavigator_material_source_hidden_fields($sourcemode, $materialids);
+        }
+
+        $html = '';
+
+        $html .= html_writer::empty_tag('input', [
+            'type' => 'hidden',
+            'name' => 'sourcemode',
+            'value' => $sourcemode,
+        ]);
+
+        foreach ($materialids as $materialid) {
+            $html .= html_writer::empty_tag('input', [
+                'type' => 'hidden',
+                'name' => 'materialids[]',
+                'value' => (int) $materialid,
+            ]);
+        }
+
+        return $html;
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_selector_script')) {
+    function local_aiskillnavigator_material_source_selector_script(): string {
+        if (function_exists('local_aiskillnavigator_material_source_footer_script')) {
+            return local_aiskillnavigator_material_source_footer_script();
+        }
+
+        return '';
+    }
+}
+
