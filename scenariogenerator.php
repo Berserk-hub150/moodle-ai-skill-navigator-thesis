@@ -19,6 +19,7 @@ $context = context_course::instance($courseid);
 require_capability('local/aiskillnavigator:viewteacher', $context);
 
 $PAGE->set_context($context);
+$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/styles.css'));
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/scenariogenerator.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('scenariogenerator', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('scenariogenerator', 'local_aiskillnavigator'));
@@ -117,7 +118,7 @@ if ($generate === 1) {
             $ragdebug = count($results) . ' RAG chunks retrieved, top similarity: ' . $results[0]->similarity;
 
             foreach ($results as $ragresult) {
-                $ragsources[$ragresult->title . ' â€” chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
+                $ragsources[$ragresult->title . ' Ã¢â‚¬â€ chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
             }
         } else if (empty($selectedmaterials)) {
             $warning = 'Non sono stati trovati chunk RAG per questo focus. Usa Manual topic only oppure carica materiali in Teacher Materials.';
@@ -137,7 +138,7 @@ if ($generate === 1) {
     }
 
     if (trim($result) === '' && $warning === '') {
-        $warning = 'La generazione Ã¨ partita, ma il servizio AI ha restituito una risposta vuota.';
+        $warning = 'La generazione ÃƒÂ¨ partita, ma il servizio AI ha restituito una risposta vuota.';
     }
 }
 

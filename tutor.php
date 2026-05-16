@@ -18,6 +18,7 @@ $context = context_course::instance($courseid);
 require_capability('local/aiskillnavigator:viewstudent', $context);
 
 $PAGE->set_context($context);
+$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/styles.css'));
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/tutor.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('aitutor', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('aitutor', 'local_aiskillnavigator'));
@@ -68,7 +69,7 @@ if ($question !== '') {
         $answer = $aiservice->ask_tutor($question);
     } else if ($selectedchunkcount === 0) {
         $warning = 'Non ci sono chunk RAG indicizzati per questa sorgente. '
-            . 'Chiedi al docente di usare “Re-index for RAG” in Teacher Materials oppure usa General AI.';
+            . 'Chiedi al docente di usare â€œRe-index for RAGâ€ in Teacher Materials oppure usa General AI.';
     } else {
         $results = local_aiskillnavigator_material_source_search($embeddingservice, $question, $courseid, 5, $sourcemode, $selectedmaterialids);
 
@@ -79,7 +80,7 @@ if ($question !== '') {
             $answer = $aiservice->ask_with_rag_context($question, $ragcontext);
 
             foreach ($results as $result) {
-                $sourcekey = $result->title . ' — chunk ' . (((int) $result->chunkindex) + 1);
+                $sourcekey = $result->title . ' â€” chunk ' . (((int) $result->chunkindex) + 1);
                 $ragsources[$sourcekey] = $result->similarity;
             }
 

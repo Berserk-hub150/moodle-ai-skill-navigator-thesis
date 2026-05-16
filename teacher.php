@@ -15,6 +15,7 @@ $context = context_course::instance($courseid);
 require_capability('local/aiskillnavigator:viewteacher', $context);
 
 $PAGE->set_context($context);
+$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/styles.css'));
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/teacher.php', ['courseid' => $courseid]));
 $PAGE->set_title('Teacher dashboard');
 $PAGE->set_heading('Teacher dashboard');

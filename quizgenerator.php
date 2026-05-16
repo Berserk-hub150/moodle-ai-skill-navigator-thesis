@@ -19,6 +19,7 @@ $context = context_course::instance($courseid);
 require_capability('local/aiskillnavigator:viewstudent', $context);
 
 $PAGE->set_context($context);
+$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/styles.css'));
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/quizgenerator.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('quizgenerator', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('quizgenerator', 'local_aiskillnavigator'));
@@ -315,7 +316,7 @@ if ($action === 'grade') {
             $ragdebug = count($results) . ' RAG chunks retrieved, top similarity: ' . $results[0]->similarity;
 
             foreach ($results as $ragresult) {
-                $ragsources[$ragresult->title . ' — chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
+                $ragsources[$ragresult->title . ' â€” chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
             }
         } else if (!empty($selectedmaterials)) {
             $warning = 'No RAG chunks found for this focus. Falling back to full material context.';
