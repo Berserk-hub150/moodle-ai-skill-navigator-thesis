@@ -13,6 +13,7 @@ require_login($course);
 $context = context_course::instance($courseid);
 
 $PAGE->set_context($context);
+$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/styles.css'));
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/index.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('pluginname', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('pluginname', 'local_aiskillnavigator'));

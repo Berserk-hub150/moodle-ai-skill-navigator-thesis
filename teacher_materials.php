@@ -17,6 +17,7 @@ $context = context_course::instance($courseid);
 require_capability('local/aiskillnavigator:managematerials', $context);
 
 $PAGE->set_context($context);
+$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/styles.css'));
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/teacher_materials.php', ['courseid' => $courseid]));
 $PAGE->set_title('Teacher materials');
 $PAGE->set_heading('Teacher materials');

@@ -19,6 +19,7 @@ $context = context_course::instance($courseid);
 require_capability('local/aiskillnavigator:viewstudent', $context);
 
 $PAGE->set_context($context);
+$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/styles.css'));
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/mindmapgenerator.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('mindmapgenerator', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('mindmapgenerator', 'local_aiskillnavigator'));
@@ -235,11 +236,11 @@ function local_aiskillnavigator_extract_json(string $raw): ?array {
     }
 
     if (empty($decoded['summary'])) {
-        $decoded['summary'] = 'Mappa mentale interattiva generata per organizzare lo studio dell’argomento.';
+        $decoded['summary'] = 'Mappa mentale interattiva generata per organizzare lo studio dellâ€™argomento.';
     }
 
     if (empty($decoded['central_description'])) {
-        $decoded['central_description'] = 'Questo è il concetto centrale della mappa. I rami mostrano definizione, parti principali, funzionamento e applicazioni.';
+        $decoded['central_description'] = 'Questo Ã¨ il concetto centrale della mappa. I rami mostrano definizione, parti principali, funzionamento e applicazioni.';
     }
 
     return $decoded;
@@ -297,7 +298,7 @@ if ($generate) {
             $ragdebug = count($results) . ' RAG chunks retrieved, top similarity: ' . $results[0]->similarity;
 
             foreach ($results as $ragresult) {
-                $ragsources[$ragresult->title . ' — chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
+                $ragsources[$ragresult->title . ' â€” chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
             }
         } else if (!empty($selectedmaterials)) {
             $warning = 'No RAG chunks found for this focus. Falling back to full material context.';
@@ -332,7 +333,7 @@ if ($generate) {
     }
 
     if ($mindmap === null) {
-        $parseerror = 'L’AI ha restituito un JSON incompleto o non valido. Riprova con un materiale più piccolo o con un focus più specifico.';
+        $parseerror = 'Lâ€™AI ha restituito un JSON incompleto o non valido. Riprova con un materiale piÃ¹ piccolo o con un focus piÃ¹ specifico.';
     }
 }
 
@@ -526,7 +527,7 @@ if ($mindmap !== null) {
             'infoTitle' => $branchtitle,
             'infoType' => 'Ramo principale',
             'infoDescription' => $branchdescription,
-            'infoHint' => 'Questo ramo organizza una parte importante dell’argomento.',
+            'infoHint' => 'Questo ramo organizza una parte importante dellâ€™argomento.',
             'title' => $branchdescription,
             'widthConstraint' => ['minimum' => 180, 'maximum' => 230],
         ];

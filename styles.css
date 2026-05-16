@@ -1,0 +1,31 @@
+﻿/* AI Skill Navigator presentation cleanup.
+   Hide Moodle automatic course/page chrome on plugin pages. */
+
+/* Hide Moodle course secondary navigation. */
+body.path-local-aiskillnavigator .secondary-navigation,
+body.path-local-aiskillnavigator #page-header .secondary-navigation,
+body.path-local-aiskillnavigator #page-header .moremenu,
+body.path-local-aiskillnavigator .moremenu.navigation,
+body.path-local-aiskillnavigator nav.moremenu,
+body.path-local-aiskillnavigator [data-region="moremenu"],
+body[id^="page-local-aiskillnavigator"] .secondary-navigation,
+body[id^="page-local-aiskillnavigator"] #page-header .secondary-navigation,
+body[id^="page-local-aiskillnavigator"] #page-header .moremenu,
+body[id^="page-local-aiskillnavigator"] .moremenu.navigation,
+body[id^="page-local-aiskillnavigator"] nav.moremenu,
+body[id^="page-local-aiskillnavigator"] [data-region="moremenu"] {
+    display: none !important;
+}
+
+/* Hide Moodle automatic page title/header.
+   The plugin already renders its own title inside the content. */
+body.path-local-aiskillnavigator #page-header,
+body[id^="page-local-aiskillnavigator"] #page-header {
+    display: none !important;
+}
+
+/* Cleaner spacing for presentation/demo. */
+body.path-local-aiskillnavigator #page,
+body[id^="page-local-aiskillnavigator"] #page {
+    margin-top: 1.5rem;
+}
