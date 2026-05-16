@@ -153,12 +153,17 @@ http://localhost:8080/local/aiskillnavigator/scenariogenerator.php?courseid=1
 
 ## AI provider configuration
 
+The current demo setup uses the **DeepSeek API**.
+
+DeepSeek is configured as a dedicated provider name, while internally it reuses the OpenAI-compatible provider strategy.
+
 Supported provider names include:
 
 - `deepseek`;
 - `openai`;
 - `openai_compatible`;
 - `openrouter`;
+- `groq`;
 - `ollama`;
 - `prototype`;
 - `mock`;
@@ -169,10 +174,12 @@ Current demo configuration:
 | Setting | Value |
 |---|---|
 | Provider | `deepseek` |
-| Endpoint | DeepSeek API endpoint configured in Moodle settings |
-| Model | DeepSeek chat model configured in Moodle settings |
+| Endpoint | `https://api.deepseek.com` |
+| Model | `deepseek-chat` |
 
-The plugin does not store API keys in the repository. Provider credentials must be configured through Moodle/plugin settings or local environment configuration.
+API keys are not stored in the repository. Credentials must be configured through Moodle/plugin settings or local environment configuration.
+
+Ollama remains supported as an optional local provider, but it is not the default provider for the current demo.
 
 ## Roadmap
 
@@ -187,4 +194,5 @@ The plugin does not store API keys in the repository. Provider credentials must 
 ## Status
 
 This repository contains an academic thesis prototype focused on feasibility, architecture, extensibility and software quality improvements.
+
 

@@ -1,19 +1,34 @@
 # Provider Configuration
 
-The AI provider is selected through Moodle plugin settings.
+The current demo setup uses the DeepSeek API.
 
-Supported provider names:
+DeepSeek is configured as a dedicated provider name, but internally it uses the OpenAI-compatible chat completions strategy.
 
-- `ollama`;
-- `openai`;
-- `openai_compatible`;
-- `openrouter`;
-- `prototype`;
-- `mock`;
-- `demo`.
+## Current demo provider
 
-Default values:
+| Setting | Value |
+|---|---|
+| Provider | `deepseek` |
+| Endpoint | `https://api.deepseek.com` |
+| Model | `deepseek-chat` |
+| API key | Configured in Moodle/plugin settings, not stored in the repository |
 
-- provider: `ollama`;
-- endpoint: `http://host.docker.internal:11434`;
-- model: `qwen2.5:3b`.
+## Supported provider names
+
+- `deepseek`
+- `openai`
+- `openai_compatible`
+- `openrouter`
+- `groq`
+- `ollama`
+- `prototype`
+- `mock`
+- `demo`
+
+## Architecture note
+
+The plugin uses the Strategy Pattern for AI providers.
+
+The DeepSeek provider is a named strategy built on top of the OpenAI-compatible provider implementation.
+
+Ollama remains available as an optional local provider, but it is not the default provider of the current demo.

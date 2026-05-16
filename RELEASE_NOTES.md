@@ -1,4 +1,4 @@
-# v1.0.0 Thesis Prototype
+﻿# v1.0.0 Thesis Prototype
 
 First public thesis prototype of AI Skill Navigator.
 
@@ -24,3 +24,10 @@ The AI layer has been refactored around:
 ## Quality focus
 
 The prototype documents and applies SOLID principles and quality attributes such as maintainability, reusability, portability, robustness, verifiability and comprehensibility.
+
+## Provider note
+
+The current demo setup uses the DeepSeek API through a dedicated DeepSeek provider built on the OpenAI-compatible strategy.
+
+Ollama remains available as an optional local provider.
+
