@@ -9,7 +9,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Moodle-Plugin-orange">
+  <img src="https://img.shields.io  <img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue">
+/badge/Moodle-Plugin-orange">
   <img src="https://img.shields.io/badge/PHP-8%2B-blue">
   <img src="https://img.shields.io/badge/AI-DeepSeek%20API%20%7C%20OpenAI--compatible-green">
   <img src="https://img.shields.io/badge/Status-Thesis%20Prototype-purple">
@@ -296,5 +297,11 @@ This keeps public Moodle URLs stable while making the repository structure easie
 This repository contains an academic thesis prototype focused on feasibility, architecture, extensibility and software quality improvements.
 
 
+## License
 
+This project is licensed under the **GNU General Public License v3.0 or later**.
+
+See the [LICENSE](LICENSE) file for details.
+
+SPDX-License-Identifier: `GPL-3.0-or-later`
 
