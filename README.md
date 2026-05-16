@@ -181,6 +181,12 @@ API keys are not stored in the repository. Credentials must be configured throug
 
 Ollama remains supported as an optional local provider, but it is not the default provider for the current demo.
 
+
+## Project documentation
+
+- [Roadmap](docs/ROADMAP.md)
+- [Release notes](docs/RELEASE_NOTES.md)
+- [Contributing guide](.github/CONTRIBUTING.md)
 ## Roadmap
 
 - Add real screenshot gallery.
@@ -191,8 +197,15 @@ Ollama remains supported as an optional local provider, but it is not the defaul
 - Add bilingual Italian/English UI strings.
 - Add automated tests for provider factory and prompt builder.
 
+
+## Project documentation
+
+- [Roadmap](docs/ROADMAP.md)
+- [Release notes](docs/RELEASE_NOTES.md)
+- [Contributing guide](.github/CONTRIBUTING.md)
 ## Status
 
 This repository contains an academic thesis prototype focused on feasibility, architecture, extensibility and software quality improvements.
+
 
 
