@@ -1,30 +1,54 @@
-﻿# AI Skill Navigator
+# AI Skill Navigator
 
-AI Skill Navigator is a Moodle local plugin developed as a thesis prototype for AI-supported learning inside a university LMS.
+AI Skill Navigator is an AI-powered Moodle local plugin developed as a thesis prototype for AI-supported learning inside a university LMS.
 
-The plugin integrates AI-based learning support tools into Moodle, including tutoring, course-material-grounded assistance, quiz generation, mind map generation, XR scenario generation and teacher-oriented learning analytics.
+It adds tutoring, course-material-grounded assistance, quiz generation, mind map generation, XR scenario generation and teacher-oriented analytics to Moodle.
 
-## Main features
+> Academic prototype focused on Generative AI, RAG, Digital Twin, Virtual Worlds and educational technology.
 
-- General AI Tutor for open learning questions.
+## Highlights
+
+- AI Tutor for open learning questions.
 - Course AI Tutor grounded on teacher materials.
-- AI Quiz Generator for formative micro-tests.
-- AI Mind Map Generator for concept visualisation.
-- AI XR Scenario Generator for structured Virtual Worlds learning scenarios.
-- Teacher materials management.
+- Quiz Generator for formative micro-tests.
+- Mind Map Generator for concept visualisation.
+- XR Scenario Generator for Virtual Worlds learning activities.
+- Teacher Materials area for course knowledge management.
 - Student dashboard with learning progress indicators.
-- Teacher dashboard with class overview and weak-topic analysis.
+- Teacher dashboard with weak-topic overview.
 - RAG-oriented support for selected course materials.
+
+## Screenshots
+
+Add screenshots inside:
+
+```text
+assets/screenshots/
+```
+
+Recommended files:
+
+```text
+dashboard.png
+ai-tutor.png
+quiz-generator.png
+mind-map-generator.png
+xr-scenario-generator.png
+teacher-materials.png
+```
+
+## Demo flow
+
+1. Open the AI Skill Navigator dashboard.
+2. Ask a question to the AI Tutor.
+3. Generate a quiz from a topic or teacher materials.
+4. Generate a mind map.
+5. Generate an XR scenario.
+6. Explain the architecture: Strategy, Factory Method and Facade.
 
 ## Thesis context
 
-The project explores how generative AI can support digital learning in Moodle, with a focus on:
-
-- personalised learning support;
-- AI-assisted formative assessment;
-- course-material-grounded tutoring;
-- digital skills training;
-- extensibility toward Virtual Worlds and XR learning environments.
+The project explores how generative AI can support digital learning in Moodle, with a focus on personalised learning, AI-assisted formative assessment, course-material-grounded tutoring, digital skills training and extensibility toward Virtual Worlds.
 
 The plugin is intended as an academic thesis prototype, not as a production-ready commercial Moodle extension.
 
@@ -40,41 +64,25 @@ The refactored AI layer contains:
 - a workflow facade;
 - backward-compatible Moodle page integrations.
 
-This keeps Moodle pages simpler while moving AI-related responsibilities into dedicated service classes.
-
 ## Design patterns
-
-The refactoring introduces three design patterns.
 
 ### Strategy
 
 The AI provider logic is abstracted through a common interface.
 
-Implemented strategies include:
+Implemented strategies:
 
 - Ollama provider;
 - OpenAI-compatible provider;
 - prototype/demo provider.
 
-This makes it possible to switch AI providers without changing Moodle pages.
-
 ### Factory Method
 
 The provider factory creates the correct AI provider based on Moodle plugin settings.
 
-This centralises provider selection and avoids spreading configuration logic across the plugin.
-
 ### Facade
 
-The AI workflow facade exposes high-level operations such as:
-
-- asking the tutor;
-- generating quizzes;
-- generating mind maps;
-- generating XR scenarios;
-- summarising materials.
-
-The facade hides provider selection, prompt construction and workflow orchestration from page controllers.
+The AI workflow facade exposes high-level operations such as asking the tutor, generating quizzes, generating mind maps, generating XR scenarios and summarising materials.
 
 ## SOLID principles
 
@@ -100,8 +108,6 @@ The facade hides provider selection, prompt construction and workflow orchestrat
 
 ## Local development
 
-The recommended local setup uses Docker and Moodle.
-
 Start Moodle:
 
 ```powershell
@@ -109,7 +115,7 @@ cd $env:USERPROFILE\Desktop\TESI-MOODLE
 docker compose up -d
 ```
 
-Deploy plugin changes into the Moodle container:
+Deploy plugin changes:
 
 ```powershell
 .\plugins\aiskillnavigator\scripts\deploy-plugin.ps1
@@ -123,8 +129,6 @@ Run PHP lint checks:
 
 ## Main plugin pages
 
-After starting Moodle, the plugin can be tested from these local URLs:
-
 ```text
 http://localhost:8080/local/aiskillnavigator/index.php
 http://localhost:8080/local/aiskillnavigator/tutor.php?courseid=1
@@ -134,8 +138,6 @@ http://localhost:8080/local/aiskillnavigator/scenariogenerator.php?courseid=1
 ```
 
 ## AI provider configuration
-
-The AI provider is selected through Moodle plugin settings.
 
 Supported provider names include:
 
@@ -155,45 +157,16 @@ Default development configuration:
 | Endpoint | `http://host.docker.internal:11434` |
 | Model | `qwen2.5:3b` |
 
-## Repository structure
+## Roadmap
 
-```text
-classes/service/
-  AI services, provider strategies, prompt builder and workflow facade
-
-db/
-  Moodle access rules and database installation files
-
-docs/
-  Architecture, SOLID, design pattern and quality documentation
-
-lang/en/
-  Moodle language strings
-
-scripts/
-  Local helper scripts for deploy, lint and manual checks
-
-*.php
-  Moodle plugin pages
-```
-
-## Manual test checklist
-
-Before presenting the project:
-
-1. Start Docker.
-2. Deploy the plugin.
-3. Purge Moodle caches.
-4. Open the plugin dashboard.
-5. Test the General AI Tutor.
-6. Test the Course AI Tutor.
-7. Test the Quiz Generator.
-8. Test the Mind Map Generator.
-9. Test the XR Scenario Generator.
-10. Check that no Moodle error page is displayed.
+- Add real screenshot gallery.
+- Add a short demo GIF.
+- Improve PDF material extraction.
+- Add JSON schema validation for XR blueprints.
+- Improve quiz difficulty calibration.
+- Add bilingual Italian/English UI strings.
+- Add automated tests for provider factory and prompt builder.
 
 ## Status
 
-This repository contains an academic thesis prototype.
-
-The current implementation focuses on demonstrating feasibility, architecture, extensibility and software quality improvements rather than production deployment.
+This repository contains an academic thesis prototype focused on feasibility, architecture, extensibility and software quality improvements.
