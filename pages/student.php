@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
@@ -16,7 +16,7 @@ require_capability('local/aiskillnavigator:viewstudent', $context);
 
 $PAGE->set_context($context);
 $PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/css/styles.css'));
-$PAGE->set_url(new moodle_url('/local/aiskillnavigator/student.php', ['courseid' => $courseid]));
+$PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/student.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('studentdashboard', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('studentdashboard', 'local_aiskillnavigator'));
 
@@ -206,19 +206,19 @@ echo html_writer::tag('p', s($recommendation));
 
 echo html_writer::div(
     html_writer::link(
-        new moodle_url('/local/aiskillnavigator/tutor.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/tutor.php', ['courseid' => $courseid]),
         'Ask Course AI Tutor',
         ['class' => 'btn btn-primary mr-2']
     ) .
     ' ' .
     html_writer::link(
-        new moodle_url('/local/aiskillnavigator/mindmapgenerator.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/mindmapgenerator.php', ['courseid' => $courseid]),
         'Generate Mind Map',
         ['class' => 'btn btn-secondary mr-2']
     ) .
     ' ' .
     html_writer::link(
-        new moodle_url('/local/aiskillnavigator/quizgenerator.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/quizgenerator.php', ['courseid' => $courseid]),
         'Try New Quiz',
         ['class' => 'btn btn-success']
     ),

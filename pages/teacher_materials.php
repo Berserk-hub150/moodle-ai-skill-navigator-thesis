@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
@@ -18,7 +18,7 @@ require_capability('local/aiskillnavigator:managematerials', $context);
 
 $PAGE->set_context($context);
 $PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/css/styles.css'));
-$PAGE->set_url(new moodle_url('/local/aiskillnavigator/teacher_materials.php', ['courseid' => $courseid]));
+$PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', ['courseid' => $courseid]));
 $PAGE->set_title('Teacher materials');
 $PAGE->set_heading('Teacher materials');
 
@@ -199,7 +199,7 @@ echo html_writer::tag('h3', 'Add material');
 
 echo html_writer::start_tag('form', [
     'method' => 'post',
-    'action' => new moodle_url('/local/aiskillnavigator/teacher_materials.php'),
+    'action' => new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php'),
     'enctype' => 'multipart/form-data',
 ]);
 
@@ -325,7 +325,7 @@ if (empty($materials)) {
         ]);
 
         echo html_writer::link(
-            new moodle_url('/local/aiskillnavigator/teacher_materials.php', [
+            new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', [
                 'action' => 'reindex',
                 'id' => $materialid,
                 'courseid' => $courseid,
@@ -336,7 +336,7 @@ if (empty($materials)) {
         );
 
         echo html_writer::link(
-            new moodle_url('/local/aiskillnavigator/teacher_materials.php', [
+            new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', [
                 'action' => 'delete',
                 'id' => $materialid,
                 'courseid' => $courseid,

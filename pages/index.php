@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
@@ -68,7 +68,7 @@ if ($canstudent) {
     echo html_writer::tag('h4', 'Student dashboard', ['class' => 'card-title']);
     echo html_writer::tag('p', 'View your quiz attempts, average score, best score and personalised recommendations.', ['class' => 'card-text']);
     echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/student.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/student.php', ['courseid' => $courseid]),
         'Open student dashboard',
         ['class' => 'btn btn-primary']
     );
@@ -82,7 +82,7 @@ if ($canstudent) {
     echo html_writer::tag('h4', 'Course AI Tutor', ['class' => 'card-title']);
     echo html_writer::tag('p', 'Ask questions grounded on the teacher materials saved in the course knowledge base.', ['class' => 'card-text']);
     echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/tutor.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/tutor.php', ['courseid' => $courseid]),
         'Open Course Tutor',
         ['class' => 'btn btn-primary']
     );
@@ -96,7 +96,7 @@ if ($canstudent) {
     echo html_writer::tag('h4', 'AI Quiz Generator', ['class' => 'card-title']);
     echo html_writer::tag('p', 'Generate an AI micro-test, answer it, and save the result in your student profile.', ['class' => 'card-text']);
     echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/quizgenerator.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/quizgenerator.php', ['courseid' => $courseid]),
         'Open Quiz Generator',
         ['class' => 'btn btn-primary']
     );
@@ -110,7 +110,7 @@ if ($canstudent) {
     echo html_writer::tag('h4', 'AI Mind Map Generator', ['class' => 'card-title']);
     echo html_writer::tag('p', 'Generate an interactive draggable mind map from an AI-generated concept structure.', ['class' => 'card-text']);
     echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/mindmapgenerator.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/mindmapgenerator.php', ['courseid' => $courseid]),
         'Open Mind Map Generator',
         ['class' => 'btn btn-primary']
     );
@@ -124,7 +124,7 @@ if ($canstudent) {
     echo html_writer::tag('h4', 'General AI Tutor', ['class' => 'card-title']);
     echo html_writer::tag('p', 'Ask general AI questions about course-related topics.', ['class' => 'card-text']);
     echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/tutor.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/tutor.php', ['courseid' => $courseid]),
         'Open AI Tutor',
         ['class' => 'btn btn-primary']
     );
@@ -140,7 +140,7 @@ if ($canteacher) {
     echo html_writer::tag('h4', 'Teacher dashboard', ['class' => 'card-title']);
     echo html_writer::tag('p', 'View class performance, student progress, weak topics and students at risk.', ['class' => 'card-text']);
     echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/teacher.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/teacher.php', ['courseid' => $courseid]),
         'Open teacher dashboard',
         ['class' => 'btn btn-info']
     );
@@ -154,7 +154,7 @@ if ($canteacher) {
     echo html_writer::tag('h4', 'AI XR Scenario Generator', ['class' => 'card-title']);
     echo html_writer::tag('p', 'Generate structured Virtual Worlds training scenarios for digital skills.', ['class' => 'card-text']);
     echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/scenariogenerator.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/scenariogenerator.php', ['courseid' => $courseid]),
         'Open Scenario Generator',
         ['class' => 'btn btn-info']
     );
@@ -170,7 +170,7 @@ if ($canmaterials) {
     echo html_writer::tag('h4', 'Teacher Materials', ['class' => 'card-title']);
     echo html_writer::tag('p', 'Upload PowerPoint slides or text files. The Course AI Tutor uses the extracted text.', ['class' => 'card-text']);
     echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/teacher_materials.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', ['courseid' => $courseid]),
         'Manage materials',
         ['class' => 'btn btn-info']
     );

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // This file is part of Moodle - https://moodle.org/
 //
 // Backward-compatible entry point for old links.
@@ -8,6 +8,6 @@ require_once(__DIR__ . '/../../../config.php');
 
 $courseid = optional_param('courseid', SITEID, PARAM_INT);
 
-redirect(new moodle_url('/local/aiskillnavigator/tutor.php', ['courseid' => $courseid]));
+redirect(new moodle_url('/local/aiskillnavigator/pages/tutor.php', ['courseid' => $courseid]));
 
 

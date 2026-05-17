@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
@@ -19,7 +19,7 @@ require_capability('local/aiskillnavigator:viewstudent', $context);
 
 $PAGE->set_context($context);
 $PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/css/styles.css'));
-$PAGE->set_url(new moodle_url('/local/aiskillnavigator/tutor.php', ['courseid' => $courseid]));
+$PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/tutor.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('aitutor', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('aitutor', 'local_aiskillnavigator'));
 
@@ -130,7 +130,7 @@ if ($warning !== '') {
 
 echo html_writer::start_tag('form', [
     'method' => 'get',
-    'action' => new moodle_url('/local/aiskillnavigator/tutor.php'),
+    'action' => new moodle_url('/local/aiskillnavigator/pages/tutor.php'),
     'class' => 'mb-4',
 ]);
 

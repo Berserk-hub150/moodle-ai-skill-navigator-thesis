@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
@@ -20,7 +20,7 @@ require_capability('local/aiskillnavigator:viewstudent', $context);
 
 $PAGE->set_context($context);
 $PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/css/styles.css'));
-$PAGE->set_url(new moodle_url('/local/aiskillnavigator/quizgenerator.php', ['courseid' => $courseid]));
+$PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/quizgenerator.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('quizgenerator', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('quizgenerator', 'local_aiskillnavigator'));
 
@@ -405,7 +405,7 @@ echo html_writer::tag('h3', 'Generate a new test');
 
 echo html_writer::start_tag('form', [
     'method' => 'get',
-    'action' => new moodle_url('/local/aiskillnavigator/quizgenerator.php'),
+    'action' => new moodle_url('/local/aiskillnavigator/pages/quizgenerator.php'),
 ]);
 
 echo html_writer::empty_tag('input', [
@@ -560,7 +560,7 @@ if ($quiz !== null) {
 
     echo html_writer::start_tag('form', [
         'method' => 'post',
-        'action' => new moodle_url('/local/aiskillnavigator/quizgenerator.php'),
+        'action' => new moodle_url('/local/aiskillnavigator/pages/quizgenerator.php'),
     ]);
 
     echo html_writer::empty_tag('input', [
@@ -688,7 +688,7 @@ echo html_writer::empty_tag('input', [
         ]);
     } else {
         echo html_writer::link(
-            new moodle_url('/local/aiskillnavigator/quizgenerator.php', [
+            new moodle_url('/local/aiskillnavigator/pages/quizgenerator.php', [
                 'generate' => 1,
                 'topic' => $topic,
                 'difficulty' => $difficulty,

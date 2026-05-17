@@ -1,4 +1,4 @@
-﻿# AI Skill Navigator
+# AI Skill Navigator
 
 <p align="center">
   <img src="assets/readme/hero-banner.png" alt="AI Skill Navigator banner" width="100%">
@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io  <img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue">
-/badge/Moodle-Plugin-orange">
-  <img src="https://img.shields.io/badge/PHP-8%2B-blue">
-  <img src="https://img.shields.io/badge/AI-DeepSeek%20API%20%7C%20OpenAI--compatible-green">
-  <img src="https://img.shields.io/badge/Status-Thesis%20Prototype-purple">
+  <img src="https://img.shields.io/badge/Moodle-Plugin-orange" alt="Moodle Plugin">
+  <img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue" alt="License: GPL-3.0-or-later">
+  <img src="https://img.shields.io/badge/PHP-8%2B-blue" alt="PHP 8+">
+  <img src="https://img.shields.io/badge/AI-DeepSeek%20API%20%7C%20OpenAI--compatible-green" alt="DeepSeek API | OpenAI-compatible">
+  <img src="https://img.shields.io/badge/Status-Thesis%20Prototype-purple" alt="Status: Thesis Prototype">
 </p>
 AI Skill Navigator is an AI-powered Moodle local plugin developed as a thesis prototype for AI-supported learning inside a university LMS.
 
@@ -146,10 +146,10 @@ Run PHP lint checks:
 
 ```text
 http://localhost:8080/local/aiskillnavigator/index.php
-http://localhost:8080/local/aiskillnavigator/tutor.php?courseid=1
-http://localhost:8080/local/aiskillnavigator/quizgenerator.php?courseid=1
-http://localhost:8080/local/aiskillnavigator/mindmapgenerator.php?courseid=1
-http://localhost:8080/local/aiskillnavigator/scenariogenerator.php?courseid=1
+http://localhost:8080/local/aiskillnavigator/pages/tutor.php?courseid=1
+http://localhost:8080/local/aiskillnavigator/pages/quizgenerator.php?courseid=1
+http://localhost:8080/local/aiskillnavigator/pages/mindmapgenerator.php?courseid=1
+http://localhost:8080/local/aiskillnavigator/pages/scenariogenerator.php?courseid=1
 ```
 
 ## AI provider configuration

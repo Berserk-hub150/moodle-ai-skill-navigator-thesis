@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
@@ -16,7 +16,7 @@ require_capability('local/aiskillnavigator:viewteacher', $context);
 
 $PAGE->set_context($context);
 $PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/css/styles.css'));
-$PAGE->set_url(new moodle_url('/local/aiskillnavigator/teacher.php', ['courseid' => $courseid]));
+$PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/teacher.php', ['courseid' => $courseid]));
 $PAGE->set_title('Teacher dashboard');
 $PAGE->set_heading('Teacher dashboard');
 
@@ -247,13 +247,13 @@ echo html_writer::end_div();
 
 echo html_writer::div(
     html_writer::link(
-        new moodle_url('/local/aiskillnavigator/teacher_materials.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', ['courseid' => $courseid]),
         'Manage teacher materials',
         ['class' => 'btn btn-primary']
     ) .
     ' ' .
     html_writer::link(
-        new moodle_url('/local/aiskillnavigator/scenariogenerator.php', ['courseid' => $courseid]),
+        new moodle_url('/local/aiskillnavigator/pages/scenariogenerator.php', ['courseid' => $courseid]),
         'Open Scenario Generator',
         ['class' => 'btn btn-secondary']
     ),

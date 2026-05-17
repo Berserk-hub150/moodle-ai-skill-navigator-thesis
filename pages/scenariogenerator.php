@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
@@ -20,7 +20,7 @@ require_capability('local/aiskillnavigator:viewteacher', $context);
 
 $PAGE->set_context($context);
 $PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/css/styles.css'));
-$PAGE->set_url(new moodle_url('/local/aiskillnavigator/scenariogenerator.php', ['courseid' => $courseid]));
+$PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/scenariogenerator.php', ['courseid' => $courseid]));
 $PAGE->set_title(get_string('scenariogenerator', 'local_aiskillnavigator'));
 $PAGE->set_heading(get_string('scenariogenerator', 'local_aiskillnavigator'));
 
@@ -188,7 +188,7 @@ echo html_writer::tag('h3', 'Generate a new XR scenario');
 
 echo html_writer::start_tag('form', [
     'method' => 'get',
-    'action' => new moodle_url('/local/aiskillnavigator/scenariogenerator.php'),
+    'action' => new moodle_url('/local/aiskillnavigator/pages/scenariogenerator.php'),
 ]);
 
 echo html_writer::empty_tag('input', [
