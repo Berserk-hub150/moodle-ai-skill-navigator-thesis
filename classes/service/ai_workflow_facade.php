@@ -1,134 +1,39 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
 
 namespace local_aiskillnavigator\service;
 
 defined('MOODLE_INTERNAL') || die();
 
-/**
- * Facade for AI workflows used by Moodle pages.
- */
-class ai_workflow_facade {
+foreach (glob(__DIR__ . '/workflow/*.php') as $file) {
+    require_once($file);
+}
 
-    private ai_provider_interface $provider;
-    private ai_prompt_builder $prompts;
+// Keeps page code small while workflows stay split by feature.
+class ai_workflow_facade {
+    private workflow\tutor_workflow $tutor; private workflow\quiz_workflow $quiz;
+    private workflow\mindmap_workflow $mindmap; private workflow\xr_workflow $xr;
+    private workflow\summary_workflow $summary;
 
     public function __construct(ai_provider_interface $provider, ai_prompt_builder $prompts) {
-        $this->provider = $provider;
-        $this->prompts = $prompts;
+        $this->tutor = new workflow\tutor_workflow($provider, $prompts);
+        $this->quiz = new workflow\quiz_workflow($provider, $prompts);
+        $this->mindmap = new workflow\mindmap_workflow($provider, $prompts);
+        $this->xr = new workflow\xr_workflow($provider, $prompts);
+        $this->summary = new workflow\summary_workflow($provider, $prompts);
     }
 
-    public function ask_tutor(string $question): string {
-        $question = trim($question);
-
-        if ($question === '') {
-            return 'Scrivi una domanda prima di inviarla al tutor AI.';
-        }
-
-        return $this->provider->generate($this->prompts->tutor_prompt($question), 1000);
-    }
-
-    public function ask_with_course_materials(string $question, array $materials): string {
-        $question = trim($question);
-
-        if ($question === '') {
-            return 'Scrivi una domanda prima di inviarla al tutor del corso.';
-        }
-
-        if (empty($materials)) {
-            return 'Non sono stati trovati materiali del docente rilevanti per rispondere alla domanda.';
-        }
-
-        return $this->provider->generate($this->prompts->tutor_with_materials_prompt($question, $materials), 1400);
-    }
-
-    public function ask_with_rag_context(string $question, string $ragcontext): string {
-        $question = trim($question);
-
-        if ($question === '') {
-            return 'Scrivi una domanda prima di inviarla al tutor del corso.';
-        }
-
-        if (trim($ragcontext) === '') {
-            return 'Non sono stati trovati materiali rilevanti nel RAG index per rispondere alla domanda.';
-        }
-
-        return $this->provider->generate($this->prompts->tutor_with_rag_prompt($question, $ragcontext), 1400);
-    }
-
-    public function generate_quiz(string $topic, string $difficulty): string {
-        return $this->provider->generate($this->prompts->quiz_prompt($topic, $difficulty), 2200);
-    }
-
-    public function generate_quiz_from_course_materials(string $focus, string $difficulty, array $materials): string {
-        if (empty($materials)) {
-            return $this->generate_quiz(trim($focus) !== '' ? $focus : 'Course materials', $difficulty);
-        }
-
-        return $this->provider->generate($this->prompts->quiz_from_materials_prompt($focus, $difficulty, $materials), 2400);
-    }
-
-    public function generate_quiz_with_rag_context(string $focus, string $difficulty, string $ragcontext): string {
-        if (trim($ragcontext) === '') {
-            return $this->generate_quiz(trim($focus) !== '' ? $focus : 'Course materials', $difficulty);
-        }
-
-        return $this->provider->generate($this->prompts->quiz_with_rag_prompt($focus, $difficulty, $ragcontext), 2400);
-    }
-
-    public function generate_mindmap(string $topic): string {
-        return $this->provider->generate($this->prompts->mindmap_prompt($topic), 1500);
-    }
-
-    public function generate_mindmap_from_course_materials(string $focus, array $materials): string {
-        if (empty($materials)) {
-            return $this->generate_mindmap(trim($focus) !== '' ? $focus : 'Course materials');
-        }
-
-        return $this->provider->generate($this->prompts->mindmap_from_materials_prompt($focus, $materials), 1800);
-    }
-
-    public function generate_mindmap_with_rag_context(string $focus, string $ragcontext): string {
-        if (trim($ragcontext) === '') {
-            return $this->generate_mindmap(trim($focus) !== '' ? $focus : 'Course materials');
-        }
-
-        return $this->provider->generate($this->prompts->mindmap_with_rag_prompt($focus, $ragcontext), 1800);
-    }
-
-    public function generate_xr_scenario(string $topic, string $environment): string {
-        return $this->provider->generate($this->prompts->xr_scenario_prompt($topic, $environment), 2800);
-    }
-
-    public function generate_xr_scenario_from_course_materials(string $focus, string $environment, array $materials): string {
-        if (empty($materials)) {
-            return $this->generate_xr_scenario(trim($focus) !== '' ? $focus : 'Digital Twin and IoT', $environment);
-        }
-
-        return $this->provider->generate($this->prompts->xr_scenario_from_materials_prompt($focus, $environment, $materials), 3000);
-    }
-
-    public function generate_xr_scenario_with_rag_context(string $focus, string $environment, string $ragcontext): string {
-        if (trim($ragcontext) === '') {
-            return $this->generate_xr_scenario(trim($focus) !== '' ? $focus : 'Digital Twin and IoT', $environment);
-        }
-
-        return $this->provider->generate($this->prompts->xr_scenario_with_rag_prompt($focus, $environment, $ragcontext), 3000);
-    }
-
-    public function summarize_course_materials(string $focus, array $materials): string {
-        if (empty($materials)) {
-            return 'Non sono stati trovati materiali leggibili del docente da riassumere.';
-        }
-
-        return $this->provider->generate($this->prompts->summarize_materials_prompt($focus, $materials), 1600);
-    }
-
-    public function summarize_with_rag_context(string $focus, string $ragcontext): string {
-        if (trim($ragcontext) === '') {
-            return 'Non sono stati trovati materiali rilevanti nel RAG index da riassumere.';
-        }
-
-        return $this->provider->generate($this->prompts->summarize_rag_prompt($focus, $ragcontext), 1600);
-    }
+    public function ask_tutor(string $q): string { return $this->tutor->ask($q); }
+    public function ask_with_course_materials(string $q, array $m): string { return $this->tutor->materials($q, $m); }
+    public function ask_with_rag_context(string $q, string $c): string { return $this->tutor->rag($q, $c); }
+    public function generate_quiz(string $t, string $d): string { return $this->quiz->plain($t, $d); }
+    public function generate_quiz_from_course_materials(string $f, string $d, array $m): string { return $this->quiz->materials($f, $d, $m); }
+    public function generate_quiz_with_rag_context(string $f, string $d, string $c): string { return $this->quiz->rag($f, $d, $c); }
+    public function generate_mindmap(string $t): string { return $this->mindmap->plain($t); }
+    public function generate_mindmap_from_course_materials(string $f, array $m): string { return $this->mindmap->materials($f, $m); }
+    public function generate_mindmap_with_rag_context(string $f, string $c): string { return $this->mindmap->rag($f, $c); }
+    public function generate_xr_scenario(string $t, string $e): string { return $this->xr->plain($t, $e); }
+    public function generate_xr_scenario_from_course_materials(string $f, string $e, array $m): string { return $this->xr->materials($f, $e, $m); }
+    public function generate_xr_scenario_with_rag_context(string $f, string $e, string $c): string { return $this->xr->rag($f, $e, $c); }
+    public function summarize_course_materials(string $f, array $m): string { return $this->summary->materials($f, $m); }
+    public function summarize_with_rag_context(string $f, string $c): string { return $this->summary->rag($f, $c); }
 }
