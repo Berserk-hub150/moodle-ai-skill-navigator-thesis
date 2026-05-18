@@ -13,9 +13,8 @@
   <img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue" alt="License: GPL-3.0-or-later">
   <img src="https://img.shields.io/badge/PHP-8%2B-blue" alt="PHP 8+">
   <img src="https://img.shields.io/badge/AI-DeepSeek%20API%20%7C%20OpenAI--compatible-green" alt="DeepSeek API | OpenAI-compatible">
-  <img src="https://img.shields.io/badge/Status-Thesis%20Prototype-purple" alt="Status: Thesis Prototype">
 </p>
-AI Skill Navigator is an AI-powered Moodle local plugin developed as a thesis prototype for AI-supported learning inside a university LMS.
+AI Skill Navigator is an AI-powered Moodle local plugin developed a prototype for AI-supported learning inside a university LMS.
 
 It adds tutoring, course-material-grounded assistance, quiz generation, mind map generation, XR scenario generation and teacher-oriented analytics to Moodle.
 
@@ -60,12 +59,6 @@ teacher-materials.png
 4. Generate a mind map.
 5. Generate an XR scenario.
 6. Explain the architecture: Strategy, Factory Method and Facade.
-
-## Thesis context
-
-The project explores how generative AI can support digital learning in Moodle, with a focus on personalised learning, AI-assisted formative assessment, course-material-grounded tutoring, digital skills training and extensibility toward Virtual Worlds.
-
-The plugin is intended as an academic thesis prototype, not as a production-ready commercial Moodle extension.
 
 ## Architecture
 
