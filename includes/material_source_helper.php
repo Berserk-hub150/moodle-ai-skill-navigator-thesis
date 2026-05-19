@@ -1,7 +1,9 @@
-﻿<?php
+<?php
 // This file is part of Moodle - https://moodle.org/
 
 defined('MOODLE_INTERNAL') || die();
+
+require_once(__DIR__ . '/../classes/service/privacy_guard.php');
 
 function local_aiskillnavigator_material_source_from_request(): array {
     $sourcemode = optional_param('sourcemode', '', PARAM_ALPHA);
@@ -23,6 +25,11 @@ function local_aiskillnavigator_material_source_from_request(): array {
 
     if (!in_array($sourcemode, ['manual', 'all', 'selected'], true)) {
         $sourcemode = 'manual';
+    }
+
+    if ($sourcemode !== 'manual' && !\local_aiskillnavigator\service\privacy_guard::can_use_teacher_materials_with_current_provider()) {
+        $sourcemode = 'manual';
+        $materialids = [];
     }
 
     $materialids = array_values(array_unique(array_filter(array_map('intval', $materialids), function ($id) {
@@ -170,12 +177,17 @@ function local_aiskillnavigator_material_source_render_controls(
     $html .= html_writer::start_div('form-group');
     $html .= html_writer::tag('label', $label, ['for' => 'sourcemode']);
 
+    $sourceoptions = [
+        'manual' => $manualtext,
+    ];
+
+    if (\local_aiskillnavigator\service\privacy_guard::can_use_teacher_materials_with_current_provider()) {
+        $sourceoptions['all'] = $alltext;
+        $sourceoptions['selected'] = $selectedtext;
+    }
+
     $html .= html_writer::select(
-        [
-            'manual' => $manualtext,
-            'all' => $alltext,
-            'selected' => $selectedtext,
-        ],
+        $sourceoptions,
         'sourcemode',
         $sourcemode,
         false,
@@ -186,6 +198,14 @@ function local_aiskillnavigator_material_source_render_controls(
     );
 
     $html .= html_writer::tag('small', $helptext, ['class' => 'form-text text-muted']);
+
+    if (!\local_aiskillnavigator\service\privacy_guard::can_use_teacher_materials_with_current_provider()) {
+        $html .= html_writer::div(
+            \local_aiskillnavigator\service\privacy_guard::teacher_materials_external_block_message(),
+            'alert alert-warning mt-2 mb-0'
+        );
+    }
+
     $html .= html_writer::end_div();
 
     $html .= html_writer::start_div('form-group mt-3', ['id' => 'selectedMaterialsBlock']);
@@ -286,17 +306,21 @@ if (!function_exists('local_aiskillnavigator_material_source_mode_from_request')
         $sourcemode = optional_param('sourcemode', '', PARAM_ALPHA);
 
         if (in_array($sourcemode, ['manual', 'all', 'selected'], true)) {
+            if ($sourcemode !== 'manual' && !\local_aiskillnavigator\service\privacy_guard::can_use_teacher_materials_with_current_provider()) {
+                return 'manual';
+            }
+
             return $sourcemode;
         }
 
         $legacyid = optional_param('materialid', $defaultmaterialid, PARAM_INT);
 
         if ($legacyid === 0) {
-            return 'all';
+            return \local_aiskillnavigator\service\privacy_guard::can_use_teacher_materials_with_current_provider() ? 'all' : 'manual';
         }
 
         if ($legacyid > 0) {
-            return 'selected';
+            return \local_aiskillnavigator\service\privacy_guard::can_use_teacher_materials_with_current_provider() ? 'selected' : 'manual';
         }
 
         return 'manual';
@@ -546,3 +570,27 @@ if (!function_exists('local_aiskillnavigator_material_source_selector_script')) 
     }
 }
 
+
+if (!function_exists('local_aiskillnavigator_material_source_search')) {
+    function local_aiskillnavigator_material_source_search(
+        \local_aiskillnavigator\service\embedding_service $embeddingservice,
+        string $query,
+        int $courseid,
+        int $topk,
+        string $sourcemode,
+        array $materialids
+    ): array {
+        if ($sourcemode !== 'manual' && !\local_aiskillnavigator\service\privacy_guard::can_use_teacher_materials_with_current_provider()) {
+            return [];
+        }
+
+        return local_aiskillnavigator_material_source_search_rag(
+            $embeddingservice,
+            $query,
+            $courseid,
+            $sourcemode,
+            $materialids,
+            $topk
+        );
+    }
+}

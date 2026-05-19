@@ -1,11 +1,8 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
 
 defined('MOODLE_INTERNAL') || die();
 
-/** @var admin_root $ADMIN */
-/** @var bool $hassiteconfig */
-global $ADMIN;
+global $ADMIN, $PAGE;
 
 if (empty($hassiteconfig)) {
     return;
@@ -13,50 +10,91 @@ if (empty($hassiteconfig)) {
 
 $settings = new admin_settingpage(
     'local_aiskillnavigator',
-    get_string('settings', 'local_aiskillnavigator')
+    'AI Skill Navigator'
 );
 
 $ADMIN->add('localplugins', $settings);
 
+$settings->add(new admin_setting_heading(
+    'local_aiskillnavigator/mainheading',
+    'AI provider configuration',
+    'Configure the AI provider used by the plugin.'
+));
+
 $settings->add(new admin_setting_configselect(
     'local_aiskillnavigator/provider',
-    get_string('provider', 'local_aiskillnavigator'),
-    get_string('provider_desc', 'local_aiskillnavigator'),
-    'ollama',
+    'Provider',
+    '',
+    'openrouter',
     [
-        'ollama' => 'Ollama',
-        'openrouter' => 'OpenRouter',
-        'openai' => 'OpenAI / compatible API',
+        'openrouter' => 'Multi-LLM API gateway',
+        'ollama' => 'Local LLM',
+        'openai_compatible' => 'OpenAI-compatible API',
+        'deepseek' => 'Direct provider API',
+        'custom_http' => 'Custom HTTP JSON',
     ]
 ));
 
 $settings->add(new admin_setting_configtext(
-    'local_aiskillnavigator/endpoint',
-    'AI endpoint',
-    'For Ollama via Colab tunnel use your Cloudflare URL, for example https://xxxx.trycloudflare.com. For local Ollama from Docker use http://host.docker.internal:11434.',
-    'http://host.docker.internal:11434',
-    PARAM_URL
-));
-
-$settings->add(new admin_setting_configtext(
     'local_aiskillnavigator/model',
-    'AI model',
-    'Example for Ollama: qwen2.5:3b. Example for OpenAI: gpt-4o-mini.',
-    'qwen2.5:3b',
-    PARAM_TEXT
-));
-
-$settings->add(new admin_setting_configtext(
-    'local_aiskillnavigator/embeddingmodel',
-    'Embedding model',
-    'Model used for RAG embeddings. For Ollama: nomic-embed-text (recommended). For OpenAI: text-embedding-3-small.',
-    'nomic-embed-text',
-    PARAM_TEXT
+    'Model',
+    '',
+    'deepseek/deepseek-chat',
+    PARAM_RAW_TRIMMED
 ));
 
 $settings->add(new admin_setting_configpasswordunmask(
     'local_aiskillnavigator/apikey',
-    get_string('apikey', 'local_aiskillnavigator'),
-    'Only required for OpenRouter/OpenAI-compatible APIs. Leave empty for Ollama.',
+    'API key',
+    '',
     ''
 ));
+
+if (!(defined('CLI_SCRIPT') && CLI_SCRIPT)) {
+    $PAGE->requires->js_init_code("
+(function() {
+    function clean() {
+        var style = document.createElement('style');
+        style.innerHTML = `
+            .form-defaultinfo,
+            .form-shortname,
+            .form-description,
+            .adminsettings .form-item .form-label .text-muted,
+            .adminsettings .form-item .form-setting .text-muted {
+                display: none !important;
+            }
+
+            .adminsettings .form-item {
+                margin-bottom: 8px !important;
+                padding-bottom: 0 !important;
+            }
+
+            .adminsettings .form-label {
+                width: 150px !important;
+                min-width: 150px !important;
+                font-weight: 600 !important;
+                font-size: 15px !important;
+            }
+
+            .adminsettings input[type='text'],
+            .adminsettings input[type='password'],
+            .adminsettings select {
+                max-width: 390px !important;
+                width: 390px !important;
+            }
+
+            .adminsettings .settingsform {
+                max-width: 700px !important;
+            }
+        `;
+        document.head.appendChild(style);
+
+        document.querySelectorAll('.form-defaultinfo').forEach(function(e) { e.remove(); });
+        document.querySelectorAll('.form-shortname').forEach(function(e) { e.remove(); });
+    }
+
+    window.addEventListener('load', clean);
+    setTimeout(clean, 300);
+})();
+");
+}

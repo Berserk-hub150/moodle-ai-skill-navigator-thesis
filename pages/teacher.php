@@ -2,6 +2,7 @@
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/callisto_real_features.php');
 
 global $PAGE, $OUTPUT, $DB;
 
@@ -250,12 +251,6 @@ echo html_writer::div(
         new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', ['courseid' => $courseid]),
         'Manage teacher materials',
         ['class' => 'btn btn-primary']
-    ) .
-    ' ' .
-    html_writer::link(
-        new moodle_url('/local/aiskillnavigator/pages/scenariogenerator.php', ['courseid' => $courseid]),
-        'Open Scenario Generator',
-        ['class' => 'btn btn-secondary']
     ),
     'mt-3 mb-4'
 );
@@ -401,6 +396,16 @@ echo html_writer::div(
 
 echo html_writer::end_div();
 
+
+// BEGIN CALLISTO_REAL_FEATURES
+if (function_exists('local_aiskillnavigator_render_course_builder_panel') && isset($courseid)) {
+    local_aiskillnavigator_render_course_builder_panel((int)$courseid);
+}
+
+if (function_exists('local_aiskillnavigator_render_external_baseline_panel')) {
+    local_aiskillnavigator_render_external_baseline_panel();
+}
+// END CALLISTO_REAL_FEATURES
 echo $OUTPUT->footer();
 
 

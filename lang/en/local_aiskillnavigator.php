@@ -14,12 +14,10 @@ $string['ai_recommendation'] = 'AI recommendation prototype';
 
 $string['aitutor'] = 'AI Tutor';
 $string['quizgenerator'] = 'AI Quiz Generator';
-$string['scenariogenerator'] = 'AI XR Scenario Generator';
 $string['mindmapgenerator'] = 'AI Mind Map Generator';
 
 $string['tutor_question'] = 'Ask a question';
 $string['quiz_topic'] = 'Quiz topic';
-$string['scenario_topic'] = 'Scenario topic';
 $string['mindmap_topic'] = 'Mind map topic';
 
 $string['settings'] = 'AI Skill Navigator settings';

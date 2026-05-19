@@ -147,20 +147,6 @@ if ($canteacher) {
     echo html_writer::end_div();
     echo html_writer::end_div();
     echo html_writer::end_div();
-
-    echo html_writer::start_div('col-md-4 mb-3');
-    echo html_writer::start_div('card h-100 border-info');
-    echo html_writer::start_div('card-body');
-    echo html_writer::tag('h4', 'AI XR Scenario Generator', ['class' => 'card-title']);
-    echo html_writer::tag('p', 'Generate structured Virtual Worlds training scenarios for digital skills.', ['class' => 'card-text']);
-    echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/pages/scenariogenerator.php', ['courseid' => $courseid]),
-        'Open Scenario Generator',
-        ['class' => 'btn btn-info']
-    );
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-    echo html_writer::end_div();
 }
 
 if ($canmaterials) {

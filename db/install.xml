@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/aiskillnavigator/db" VERSION="2026051401" COMMENT="XMLDB file for local_aiskillnavigator"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
+<XMLDB PATH="local/aiskillnavigator/db" VERSION="2026051921" COMMENT="XMLDB file for local_aiskillnavigator">
   <TABLES>
-    <TABLE NAME="local_aiskillnav_material" COMMENT="Teacher course materials for AI tutor">
+    <TABLE NAME="local_aiskillnav_material" COMMENT="Teacher course materials">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
@@ -23,18 +21,18 @@
       </INDEXES>
     </TABLE>
 
-    <TABLE NAME="local_aiskillnav_attempt" COMMENT="Student AI quiz attempts">
+    <TABLE NAME="local_aiskillnav_attempt" COMMENT="Student generated quiz attempts">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="topic" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="topic" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT=""/>
         <FIELD NAME="difficulty" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="medium"/>
         <FIELD NAME="score" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
         <FIELD NAME="maxscore" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
         <FIELD NAME="percentage" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="quizjson" TYPE="text" NOTNULL="false"/>
-        <FIELD NAME="answersjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="quizjson" TYPE="text"/>
+        <FIELD NAME="answersjson" TYPE="text"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
       </FIELDS>
       <KEYS>
@@ -43,28 +41,75 @@
       <INDEXES>
         <INDEX NAME="courseid_ix" UNIQUE="false" FIELDS="courseid"/>
         <INDEX NAME="userid_ix" UNIQUE="false" FIELDS="userid"/>
-        <INDEX NAME="topic_ix" UNIQUE="false" FIELDS="topic"/>
       </INDEXES>
     </TABLE>
 
-    <TABLE NAME="local_aiskillnav_chunk" COMMENT="RAG chunks with embeddings for semantic search">
+    <TABLE NAME="local_aiskillnav_chunk" COMMENT="RAG chunks and embeddings">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="materialid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT=""/>
         <FIELD NAME="chunkindex" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
         <FIELD NAME="chunktext" TYPE="text" NOTNULL="true"/>
-        <FIELD NAME="embedding" TYPE="text" NOTNULL="false"/>
-        <FIELD NAME="embeddingmodel" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="embedding" TYPE="text"/>
+        <FIELD NAME="embeddingmodel" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT=""/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="materialid_ix" UNIQUE="false" FIELDS="materialid"/>
         <INDEX NAME="courseid_ix" UNIQUE="false" FIELDS="courseid"/>
+        <INDEX NAME="materialid_ix" UNIQUE="false" FIELDS="materialid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_aiskillnav_assessment" COMMENT="Teacher diagnostic assessments">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="assessmenttype" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="pre"/>
+        <FIELD NAME="focus" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT=""/>
+        <FIELD NAME="difficulty" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="medium"/>
+        <FIELD NAME="quizjson" TYPE="text" NOTNULL="true"/>
+        <FIELD NAME="sourcemode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="all"/>
+        <FIELD NAME="materialids" TYPE="text"/>
+        <FIELD NAME="visible" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="courseid_ix" UNIQUE="false" FIELDS="courseid"/>
+        <INDEX NAME="type_ix" UNIQUE="false" FIELDS="assessmenttype"/>
+        <INDEX NAME="visible_ix" UNIQUE="false" FIELDS="visible"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_aiskillnav_ass_att" COMMENT="Student diagnostic assessment attempts">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="assessmentid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="score" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="maxscore" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="percentage" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="answersjson" TYPE="text"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="assessmentid_ix" UNIQUE="false" FIELDS="assessmentid"/>
+        <INDEX NAME="courseid_ix" UNIQUE="false" FIELDS="courseid"/>
+        <INDEX NAME="userid_ix" UNIQUE="false" FIELDS="userid"/>
       </INDEXES>
     </TABLE>
   </TABLES>
