@@ -1,7 +1,8 @@
 <?php
 
 require_once(__DIR__ . '/../../../config.php');
-require_once(__DIR__ . '/../includes/callisto_real_features.php');
+require_once(__DIR__ . '/../includes/ui_style_helper.php');
+require_once(__DIR__ . '/../includes/course_resource_sync.php');
 require_once(__DIR__ . '/../includes/material_source_helper.php');
 
 use local_aiskillnavigator\service\ai_provider_factory;
@@ -13,6 +14,10 @@ $courseid = optional_param('courseid', SITEID, PARAM_INT);
 $course = get_course($courseid);
 
 require_login($course);
+if (isset($courseid) && (int)$courseid > 1 && function_exists('local_aiskillnavigator_sync_course_resources')) {
+    local_aiskillnavigator_sync_course_resources((int)$courseid, (int)$USER->id, false);
+}
+
 
 $context = context_course::instance($courseid);
 require_capability('local/aiskillnavigator:viewteacher', $context);
@@ -166,7 +171,7 @@ function local_aiskillnavigator_assessment_build_prompt(
     $prompt = "Genera un {$typename} per Moodle.\n\n";
     $prompt .= "Obiettivo: {$goal}.\n";
     $prompt .= "Focus: {$focus}.\n";
-    $prompt .= "DifficoltÃƒÆ’Ã‚Â : {$difficulty}.\n\n";
+    $prompt .= "DifficoltÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â : {$difficulty}.\n\n";
 
     if (trim($materialcontext) !== '') {
         $prompt .= "MATERIALI DEL DOCENTE / CONTESTO RAG:\n{$materialcontext}\n\n";
@@ -194,7 +199,7 @@ function local_aiskillnavigator_assessment_build_prompt(
     $prompt .= "Regole obbligatorie: genera esattamente 5 domande, ogni domanda deve avere esattamente 4 opzioni, correct_index deve essere tra 0 e 3, explanation breve massimo 180 caratteri.\n";
 
     if ($type === 'pre') {
-        $prompt .= "Per il quiz iniziale: includi domande sui prerequisiti, sui concetti base e almeno una domanda che distingua studenti giÃƒÆ’Ã‚Â  esperti.\n";
+        $prompt .= "Per il quiz iniziale: includi domande sui prerequisiti, sui concetti base e almeno una domanda che distingua studenti giÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â  esperti.\n";
     } else {
         $prompt .= "Per il test finale: includi domande di comprensione, applicazione e collegamento tra concetti, evitando domande solo mnemoniche.\n";
     }
@@ -336,6 +341,7 @@ $assessments = $DB->get_records(
 );
 
 echo $OUTPUT->header();
+local_aiskillnavigator_print_inline_styles();
 
 echo html_writer::start_div('container-fluid');
 
@@ -622,9 +628,12 @@ echo html_writer::div(
 echo html_writer::end_div();
 
 
-// BEGIN CALLISTO_REAL_FEATURES
-if (function_exists('local_aiskillnavigator_render_gap_panel') && isset($courseid)) {
-    local_aiskillnavigator_render_gap_panel((int)$courseid);
-}
-// END CALLISTO_REAL_FEATURES
+
+echo html_writer::div(
+    html_writer::link(
+        new moodle_url('/local/aiskillnavigator/pages/gap_analysis.php', ['courseid' => $courseid]),
+        'Open AI learning-gap analysis',
+        ['class' => 'btn btn-outline-primary mt-3']
+    )
+);
 echo $OUTPUT->footer();

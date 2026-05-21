@@ -1,3 +1,17 @@
+<?php
+
+defined('MOODLE_INTERNAL') || die();
+
+function local_aiskillnavigator_print_inline_styles(): void {
+    static $printed = false;
+
+    if ($printed) {
+        return;
+    }
+
+    $printed = true;
+
+    echo html_writer::tag('style', <<<'CSS'
 body.path-local-aiskillnavigator #page,
 body[id^="page-local-aiskillnavigator"] #page {
     background: #f6f8fb !important;
@@ -43,6 +57,7 @@ body[id^="page-local-aiskillnavigator"] .card {
     border-radius: 22px !important;
     box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07) !important;
     overflow: hidden;
+    background: #ffffff !important;
 }
 
 body.path-local-aiskillnavigator .card-body,
@@ -65,13 +80,29 @@ body[id^="page-local-aiskillnavigator"] .btn-primary {
 
 body.path-local-aiskillnavigator input.form-control,
 body.path-local-aiskillnavigator textarea.form-control,
-body.path-local-aiskillnavigator select.form-control,
 body[id^="page-local-aiskillnavigator"] input.form-control,
-body[id^="page-local-aiskillnavigator"] textarea.form-control,
-body[id^="page-local-aiskillnavigator"] select.form-control {
+body[id^="page-local-aiskillnavigator"] textarea.form-control {
     border-radius: 14px !important;
     border: 1px solid #cbd5e1 !important;
     padding: 11px 13px !important;
+}
+
+body.path-local-aiskillnavigator select,
+body.path-local-aiskillnavigator select.form-control,
+body.path-local-aiskillnavigator .custom-select,
+body[id^="page-local-aiskillnavigator"] select,
+body[id^="page-local-aiskillnavigator"] select.form-control,
+body[id^="page-local-aiskillnavigator"] .custom-select {
+    min-height: 44px !important;
+    height: 44px !important;
+    line-height: 1.35 !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+    padding-left: 12px !important;
+    padding-right: 36px !important;
+    border-radius: 14px !important;
+    border: 1px solid #cbd5e1 !important;
+    background-position: right 12px center !important;
 }
 
 body.path-local-aiskillnavigator .alert,
@@ -200,8 +231,37 @@ body[id^="page-local-aiskillnavigator"] .alert {
     display: none !important;
 }
 
+.aisn-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.aisn-stat {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .06);
+}
+
+.aisn-stat-value {
+    font-size: 30px;
+    font-weight: 850;
+    color: #0f172a;
+}
+
+.aisn-stat-label {
+    color: #64748b;
+    font-size: 14px;
+}
+
 @media (max-width: 760px) {
     .aisn-choice-row {
         grid-template-columns: 1fr;
     }
+}
+CSS
+    );
 }

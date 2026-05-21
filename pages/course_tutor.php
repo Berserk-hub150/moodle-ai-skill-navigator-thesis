@@ -5,6 +5,8 @@
 // The real AI tutor page is tutor.php.
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ui_style_helper.php');
+require_once(__DIR__ . '/../includes/course_resource_sync.php');
 
 $courseid = optional_param('courseid', SITEID, PARAM_INT);
 

@@ -2,6 +2,8 @@
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ui_style_helper.php');
+require_once(__DIR__ . '/../includes/course_resource_sync.php');
 require_once(__DIR__ . '/../includes/callisto_real_features.php');
 
 global $PAGE, $OUTPUT, $DB;
@@ -10,6 +12,10 @@ $courseid = optional_param('courseid', SITEID, PARAM_INT);
 $course = get_course($courseid);
 
 require_login($course);
+if (isset($courseid) && (int)$courseid > 1 && function_exists('local_aiskillnavigator_sync_course_resources')) {
+    local_aiskillnavigator_sync_course_resources((int)$courseid, (int)$USER->id, false);
+}
+
 
 $context = context_course::instance($courseid);
 
@@ -193,6 +199,7 @@ function local_aiskillnavigator_teacher_status_text(int $percentage): string {
 }
 
 echo $OUTPUT->header();
+local_aiskillnavigator_print_inline_styles();
 
 echo html_writer::start_div('container-fluid');
 

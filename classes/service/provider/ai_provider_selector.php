@@ -13,7 +13,9 @@ defined('MOODLE_INTERNAL') || die();
 
 class ai_provider_selector {
     public function create(ai_provider_config $config): ai_provider_interface {
-        if ($config->provider === 'custom_http') {
+        $provider = strtolower(trim($config->provider));
+
+        if ($provider === 'custom_http') {
             return new custom_http_ai_provider(
                 $config->endpoint,
                 $config->model ?: 'default',
@@ -24,7 +26,7 @@ class ai_provider_selector {
             );
         }
 
-        if ($config->provider === 'deepseek') {
+        if ($provider === 'deepseek') {
             return new deepseek_ai_provider(
                 $config->endpoint ?: 'https://api.deepseek.com',
                 $config->model ?: 'deepseek-chat',
@@ -32,13 +34,7 @@ class ai_provider_selector {
             );
         }
 
-        if (in_array($config->provider, ['openai', 'openai_compatible', 'openrouter', 'groq'], true)) {
-            return $config->endpoint === ''
-                ? new prototype_ai_provider()
-                : new openai_compatible_ai_provider($config->endpoint, $config->model ?: 'default', $config->apikey);
-        }
-
-        if ($config->provider === 'ollama') {
+        if ($provider === 'ollama' || $provider === 'local') {
             return new ollama_ai_provider(
                 $config->endpoint ?: 'http://host.docker.internal:11434',
                 $config->model ?: 'qwen2.5:3b',
@@ -46,6 +42,29 @@ class ai_provider_selector {
             );
         }
 
+        if (
+            in_array($provider, [
+                'openai',
+                'openai_compatible',
+                'openrouter',
+                'groq',
+                'mistral',
+                'together',
+                'fireworks',
+                'perplexity',
+                'lmstudio',
+                'vllm',
+                'text-generation-webui'
+            ], true)
+        ) {
+            return $config->endpoint === ''
+                ? new prototype_ai_provider()
+                : new openai_compatible_ai_provider($config->endpoint, $config->model ?: 'default', $config->apikey);
+        }
+
+        // Claude, Gemini, HuggingFace and unusual providers should be used through:
+        // 1) OpenRouter when possible, or
+        // 2) Custom HTTP JSON templates.
         return new prototype_ai_provider();
     }
 }

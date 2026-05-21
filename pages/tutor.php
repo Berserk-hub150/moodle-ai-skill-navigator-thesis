@@ -1,15 +1,13 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
-require_once(__DIR__ . '/../includes/material_source_helper.php');
+require_once(__DIR__ . '/../includes/ui_style_helper.php');
+require_once(__DIR__ . '/../includes/course_resource_sync.php');
+require_once(__DIR__ . '/../includes/material_ai_policy.php');
 
-use local_aiskillnavigator\service\embedding_service;
-use local_aiskillnavigator\service\real_ai_service;
+global $DB, $PAGE, $OUTPUT, $USER;
 
-global $PAGE, $OUTPUT, $DB;
-
-$courseid = optional_param('courseid', SITEID, PARAM_INT);
+$courseid = optional_param('courseid', optional_param('id', SITEID, PARAM_INT), PARAM_INT);
 $course = get_course($courseid);
 
 require_login($course);
@@ -17,234 +15,569 @@ require_login($course);
 $context = context_course::instance($courseid);
 require_capability('local/aiskillnavigator:viewstudent', $context);
 
+if (function_exists('local_aiskillnavigator_sync_course_resources')) {
+    local_aiskillnavigator_sync_course_resources((int)$courseid, (int)$USER->id, false);
+}
+
 $PAGE->set_context($context);
 $PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/css/styles.css'));
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/tutor.php', ['courseid' => $courseid]));
-$PAGE->set_title(get_string('aitutor', 'local_aiskillnavigator'));
-$PAGE->set_heading(get_string('aitutor', 'local_aiskillnavigator'));
+$PAGE->set_title('AI Tutor');
+$PAGE->set_heading('AI Tutor');
 
-$question = optional_param('question', '', PARAM_TEXT);
+function local_aiskillnavigator_tutor_get_materials(int $courseid): array {
+    global $DB;
 
-// -1 = general AI, 0 = RAG across all materials, >0 = RAG restricted to selected material.
-$materialid = optional_param('materialid', -1, PARAM_INT);
+    if (!$DB->get_manager()->table_exists(new xmldb_table('local_aiskillnav_material'))) {
+        return [];
+    }
+
+    $records = $DB->get_records(
+        'local_aiskillnav_material',
+        ['courseid' => $courseid],
+        'timemodified DESC, timecreated DESC'
+    );
+
+    $materials = [];
+
+    foreach ($records as $record) {
+        if (trim((string)($record->content ?? '')) !== '') {
+            $materials[(int)$record->id] = $record;
+        }
+    }
+
+    return $materials;
+}
+
+function local_aiskillnavigator_tutor_short_title(stdClass $material): string {
+    $title = trim((string)($material->title ?? 'Course material'));
+    $title = preg_replace('/^\[Course #[0-9]+ \/ cm #[0-9]+\]\s*/', '', $title);
+    return trim($title) !== '' ? trim($title) : 'Course material';
+}
+
+function local_aiskillnavigator_tutor_excerpt(string $text, int $limit = 170): string {
+    $text = trim((string)preg_replace('/\s+/u', ' ', $text));
+
+    if (core_text::strlen($text) > $limit) {
+        return core_text::substr($text, 0, $limit) . '...';
+    }
+
+    return $text;
+}
+
+function local_aiskillnavigator_tutor_limit_context(string $text, int $limit = 9000): string {
+    $text = trim($text);
+
+    if (core_text::strlen($text) > $limit) {
+        return core_text::substr($text, 0, $limit) . "\n[Content truncated]";
+    }
+
+    return $text;
+}
+
+function local_aiskillnavigator_tutor_call_ai(string $prompt, string $systemprompt): string {
+    try {
+        if (class_exists('\local_aiskillnavigator\service\ai_provider_factory')) {
+            $provider = \local_aiskillnavigator\service\ai_provider_factory::create_from_config();
+            return $provider->generate($prompt, 2600, $systemprompt);
+        }
+
+        if (
+            class_exists('\local_aiskillnavigator\service\provider\ai_provider_config') &&
+            class_exists('\local_aiskillnavigator\service\provider\ai_provider_selector')
+        ) {
+            $config = new \local_aiskillnavigator\service\provider\ai_provider_config();
+            $selector = new \local_aiskillnavigator\service\provider\ai_provider_selector();
+            $provider = $selector->create($config);
+            return $provider->generate($prompt, 2600, $systemprompt);
+        }
+    } catch (Throwable $e) {
+        return 'AI error: ' . $e->getMessage();
+    }
+
+    return 'AI provider not available. Configure it from plugin settings.';
+}
+
+$materials = local_aiskillnavigator_tutor_get_materials((int)$courseid);
+$materials = local_aiskillnavigator_filter_materials_for_current_ai((array)$materials);
+
+$sourceMode = optional_param('source_mode', 'manual', PARAM_ALPHA);
+$question = optional_param('question', '', PARAM_RAW_TRIMMED);
+$selectedMaterialIds = optional_param_array('materialids', [], PARAM_INT);
+
+if (!in_array($sourceMode, ['manual', 'selected'], true)) {
+    $sourceMode = 'manual';
+}
 
 $answer = '';
-$warning = '';
-$ragsources = [];
-$ragdebug = '';
+$error = '';
+$usedMaterialNames = [];
 
-$materials = $DB->get_records(
-    'local_aiskillnav_material',
-    ['courseid' => $courseid],
-    'timecreated DESC'
-);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_sesskey();
 
-$readablematerials = [];
-
-foreach ($materials as $material) {
-    $content = trim((string) ($material->content ?? ''));
-
-    if ($content !== '') {
-        $readablematerials[(int) $material->id] = $material;
-    }
-}
-
-$embeddingservice = new embedding_service();
-$totalchunks = $embeddingservice->count_indexed_chunks($courseid);
-
-$sourcemode = local_aiskillnavigator_material_source_mode_from_request(-1);
-$selectedmaterialids = local_aiskillnavigator_material_source_selected_ids_from_request($readablematerials);
-$selectedmaterials = local_aiskillnavigator_material_source_selected_materials($readablematerials, $sourcemode, $selectedmaterialids);
-$selectedchunkcount = local_aiskillnavigator_material_source_count_chunks($embeddingservice, $courseid, $sourcemode, $selectedmaterialids);
-$materialid = local_aiskillnavigator_material_source_legacy_materialid($sourcemode, $selectedmaterialids);
-
-if ($sourcemode === 'selected' && empty($selectedmaterialids)) {
-    $warning = 'Select at least one teacher material or switch to all course materials.';
-}
-
-if ($question !== '') {
-    $aiservice = new real_ai_service();
-
-    if ($sourcemode === 'manual') {
-        $answer = $aiservice->ask_tutor($question);
-    } else if ($selectedchunkcount === 0) {
-        $warning = 'Non ci sono chunk RAG indicizzati per questa sorgente. '
-            . 'Chiedi al docente di usare Ã¢â‚¬Å“Re-index for RAGÃ¢â‚¬Â in Teacher Materials oppure usa General AI.';
+    if ($question === '') {
+        $error = 'Write a question first.';
     } else {
-        $results = local_aiskillnavigator_material_source_search($embeddingservice, $question, $courseid, 5, $sourcemode, $selectedmaterialids);
+        $selectedMaterials = [];
 
-        if (empty($results)) {
-            $warning = 'Nessun chunk rilevante trovato nel RAG index. Prova a riformulare la domanda o usa General AI.';
-        } else {
-            $ragcontext = $embeddingservice->build_context($results, 6000);
-            $answer = $aiservice->ask_with_rag_context($question, $ragcontext);
+        if ($sourceMode === 'selected') {
+            foreach ($selectedMaterialIds as $materialid) {
+                $materialid = (int)$materialid;
 
-            foreach ($results as $result) {
-                $sourcekey = $result->title . ' Ã¢â‚¬â€ chunk ' . (((int) $result->chunkindex) + 1);
-                $ragsources[$sourcekey] = $result->similarity;
+                if (isset($materials[$materialid])) {
+                    $selectedMaterials[] = $materials[$materialid];
+                }
             }
 
-            $ragdebug = count($results) . ' chunks retrieved, top similarity: ' . $results[0]->similarity;
+            if (empty($selectedMaterials)) {
+                $error = 'Select at least one course material, or choose Question only.';
+            }
+        }
+
+        if ($error === '') {
+            if ($sourceMode === 'manual') {
+                $systemprompt = 'You are a Moodle AI tutor. Answer using only the student question and general knowledge. Do not claim that course materials were used.';
+                $prompt = "Student question:\n" . $question;
+            } else {
+                $contextparts = [];
+
+                foreach ($selectedMaterials as $material) {
+                    $name = local_aiskillnavigator_tutor_short_title($material);
+                    $usedMaterialNames[] = $name;
+
+                    $contextparts[] =
+                        "SOURCE: " . $name . "\n" .
+                        local_aiskillnavigator_tutor_limit_context((string)$material->content);
+                }
+
+                $systemprompt = 'You are a Moodle AI tutor. Use only the selected course materials as grounding context. If the selected materials do not contain enough information, say it clearly. Do not invent sources.';
+
+                $prompt =
+                    "Selected course materials:\n\n" .
+                    implode("\n\n---\n\n", $contextparts) .
+                    "\n\nStudent question:\n" .
+                    $question .
+                    "\n\nAnswer in the same language as the student.";
+            }
+
+            $answer = local_aiskillnavigator_tutor_call_ai($prompt, $systemprompt);
         }
     }
 }
 
 echo $OUTPUT->header();
+local_aiskillnavigator_print_inline_styles();
 
-echo html_writer::start_div('container-fluid');
-
-echo html_writer::tag('h2', get_string('aitutor', 'local_aiskillnavigator'));
-
-echo html_writer::tag(
-    'p',
-    'Ask questions using general AI or teacher materials. In RAG mode, the system retrieves the most relevant indexed chunks and grounds the answer on them.',
-    ['class' => 'lead']
-);
-
-echo html_writer::tag(
-    'p',
-    'Course: ' . s($course->fullname),
-    ['class' => 'text-muted']
-);
-
-if ($totalchunks > 0) {
-    echo html_writer::div(
-        'RAG index: ' . $totalchunks . ' chunks indexed. Semantic search is active.',
-        'alert alert-success'
-    );
-} else if (!empty($readablematerials)) {
-    echo html_writer::div(
-        'Materials found but not indexed for RAG. Ask the teacher to re-index them from Teacher Materials.',
-        'alert alert-warning'
-    );
-} else {
-    echo html_writer::div(
-        'No teacher materials found yet. You can still use General AI.',
-        'alert alert-warning'
-    );
+echo html_writer::tag('style', '
+body.path-local-aiskillnavigator #page-header,
+body[id^="page-local-aiskillnavigator"] #page-header,
+body.path-local-aiskillnavigator .secondary-navigation,
+body[id^="page-local-aiskillnavigator"] .secondary-navigation {
+    display: none !important;
 }
 
-if ($warning !== '') {
-    echo html_writer::div(s($warning), 'alert alert-warning');
+#page {
+    background: #f6f8fb !important;
+}
+
+.aisn-wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+}
+
+.aisn-hero {
+    background: linear-gradient(135deg, #0f6cbf 0%, #2b82d9 55%, #68b3ff 100%);
+    color: #fff;
+    border-radius: 26px;
+    padding: 30px 34px;
+    margin-bottom: 24px;
+    box-shadow: 0 18px 42px rgba(15, 108, 191, .24);
+}
+
+.aisn-hero h2 {
+    color: #fff;
+    font-size: 36px;
+    font-weight: 850;
+    margin: 0 0 8px;
+    letter-spacing: -0.04em;
+}
+
+.aisn-hero p {
+    margin: 0;
+    font-size: 16px;
+    opacity: .96;
+}
+
+.aisn-grid {
+    display: grid;
+    gap: 20px;
+}
+
+.aisn-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 14px 34px rgba(15, 23, 42, .07);
+}
+
+.aisn-card h3 {
+    margin: 0 0 16px;
+    font-size: 23px;
+    font-weight: 850;
+    letter-spacing: -0.03em;
+}
+
+.aisn-muted {
+    color: #64748b;
+}
+
+.aisn-choice-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.aisn-choice {
+    display: block;
+    border: 2px solid #e5e7eb;
+    background: #f8fafc;
+    border-radius: 18px;
+    padding: 18px;
+    cursor: pointer;
+    transition: .15s ease-in-out;
+}
+
+.aisn-choice:hover {
+    border-color: #0f6cbf;
+    background: #eff6ff;
+}
+
+.aisn-choice:has(input:checked) {
+    border-color: #0f6cbf;
+    background: #eff6ff;
+    box-shadow: 0 10px 24px rgba(15, 108, 191, .14);
+}
+
+.aisn-choice input {
+    margin-right: 8px;
+}
+
+.aisn-choice-title {
+    font-weight: 850;
+}
+
+.aisn-choice-text {
+    display: block;
+    margin-top: 8px;
+    color: #64748b;
+    font-size: 14px;
+}
+
+.aisn-material-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+}
+
+.aisn-material {
+    display: block;
+    min-height: 150px;
+    border: 2px solid #e5e7eb;
+    border-radius: 18px;
+    padding: 16px;
+    background: #fff;
+    cursor: pointer;
+    transition: .15s ease-in-out;
+}
+
+.aisn-material:hover {
+    border-color: #0f6cbf;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .08);
+}
+
+.aisn-material:has(input:checked) {
+    border-color: #16a34a;
+    background: #f0fdf4;
+    box-shadow: 0 10px 24px rgba(22, 163, 74, .12);
+}
+
+.aisn-material input {
+    margin-right: 8px;
+}
+
+.aisn-material-title {
+    font-weight: 850;
+}
+
+.aisn-badge {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #075985;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.aisn-excerpt {
+    margin-top: 10px;
+    color: #64748b;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.aisn-question {
+    width: 100%;
+    min-height: 120px;
+    border: 1px solid #cbd5e1;
+    border-radius: 16px;
+    padding: 14px 16px;
+    font-size: 15px;
+    resize: vertical;
+}
+
+.aisn-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 16px;
+}
+
+.aisn-primary {
+    border: 0;
+    border-radius: 14px;
+    padding: 12px 24px;
+    background: #0f6cbf;
+    color: #fff;
+    font-weight: 850;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(15, 108, 191, .24);
+}
+
+.aisn-primary:hover {
+    background: #0b5ca8;
+}
+
+.aisn-secondary {
+    border-radius: 14px;
+    padding: 11px 18px;
+    background: #f1f5f9;
+    color: #0f172a;
+    text-decoration: none;
+    font-weight: 750;
+}
+
+.aisn-answer {
+    white-space: pre-wrap;
+    background: #0f172a;
+    color: #e5e7eb;
+    padding: 22px;
+    border-radius: 18px;
+    line-height: 1.55;
+}
+
+.aisn-empty {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    padding: 14px 16px;
+    border-radius: 16px;
+}
+
+.aisn-hidden {
+    display: none !important;
+}
+
+@media (max-width: 760px) {
+    .aisn-choice-row {
+        grid-template-columns: 1fr;
+    }
+}
+');
+
+echo html_writer::start_div('aisn-wrap');
+
+echo html_writer::start_div('aisn-hero');
+echo html_writer::tag('h2', 'AI Tutor');
+echo html_writer::tag('p', 'Ask a free question, or select exactly which Moodle course materials the AI can use.');
+echo html_writer::end_div();
+
+if ($error !== '') {
+    echo html_writer::div(s($error), 'alert alert-danger');
 }
 
 echo html_writer::start_tag('form', [
-    'method' => 'get',
-    'action' => new moodle_url('/local/aiskillnavigator/pages/tutor.php'),
-    'class' => 'mb-4',
+    'method' => 'post',
+    'action' => new moodle_url('/local/aiskillnavigator/pages/tutor.php', ['courseid' => $courseid]),
 ]);
 
 echo html_writer::empty_tag('input', [
     'type' => 'hidden',
-    'name' => 'courseid',
-    'value' => $courseid,
+    'name' => 'sesskey',
+    'value' => sesskey(),
 ]);
 
-echo html_writer::start_div('form-group');
-echo local_aiskillnavigator_material_source_selector_html(
-    $readablematerials,
-    $embeddingservice,
-    $courseid,
-    $sourcemode,
-    $selectedmaterialids,
-    'Answer source',
-    'General AI answers freely. RAG mode searches indexed teacher materials. Use selected materials to ground the answer only on specific uploaded files.'
-);
+echo html_writer::start_div('aisn-grid');
+
+echo html_writer::start_div('aisn-card');
+echo html_writer::tag('h3', '1. Source');
+
+echo html_writer::start_div('aisn-choice-row');
+
+echo html_writer::start_tag('label', ['class' => 'aisn-choice']);
+echo html_writer::empty_tag('input', [
+    'type' => 'radio',
+    'name' => 'source_mode',
+    'value' => 'manual',
+    'checked' => $sourceMode === 'manual' ? 'checked' : null,
+]);
+echo html_writer::span('Question only', 'aisn-choice-title');
+echo html_writer::span('Do not use course materials.', 'aisn-choice-text');
+echo html_writer::end_tag('label');
+
+echo html_writer::start_tag('label', ['class' => 'aisn-choice']);
+echo html_writer::empty_tag('input', [
+    'type' => 'radio',
+    'name' => 'source_mode',
+    'value' => 'selected',
+    'checked' => $sourceMode === 'selected' ? 'checked' : null,
+]);
+echo html_writer::span('Use course materials', 'aisn-choice-title');
+echo html_writer::span('Choose one or more materials below.', 'aisn-choice-text');
+echo html_writer::end_tag('label');
+
+echo html_writer::end_div();
 echo html_writer::end_div();
 
-echo html_writer::start_div('form-group mt-3');
-echo html_writer::tag(
-    'label',
-    get_string('tutor_question', 'local_aiskillnavigator'),
-    ['for' => 'question']
-);
+$materialsclass = $sourceMode === 'manual' ? 'aisn-card aisn-hidden' : 'aisn-card';
 
-echo html_writer::empty_tag('input', [
-    'type' => 'text',
-    'name' => 'question',
-    'id' => 'question',
-    'class' => 'form-control',
-    'value' => s($question),
-    'placeholder' => 'Esempio: spiegami il rapporto tra IoT e Digital Twin',
-]);
-echo html_writer::end_div();
+echo html_writer::start_div($materialsclass, ['id' => 'materials-panel']);
+echo html_writer::tag('h3', '2. Materials');
 
-echo html_writer::empty_tag('input', [
-    'type' => 'submit',
-    'class' => 'btn btn-primary mt-2',
-    'value' => 'Ask AI',
-]);
+if (empty($materials)) {
+    echo html_writer::div(
+        'No course materials found yet. Add a Moodle File, Page, Label, Folder, URL or Book resource to this course.',
+        'aisn-empty'
+    );
+} else {
+    echo html_writer::tag('p', 'Select the exact course materials to use.', ['class' => 'aisn-muted']);
+    echo html_writer::start_div('aisn-material-grid');
 
-echo html_writer::end_tag('form');
+    foreach ($materials as $material) {
+        $id = (int)$material->id;
+        $checked = in_array($id, $selectedMaterialIds, true) && $sourceMode === 'selected';
 
-if ($answer !== '') {
-    echo html_writer::start_div('card mt-4');
-    echo html_writer::start_div('card-body ai-answer-card');
+        echo html_writer::start_tag('label', ['class' => 'aisn-material']);
 
-    if ($sourcemode === 'manual') {
-        echo html_writer::tag('h3', 'AI answer from general model');
-        echo html_writer::tag('p', 'Generated from general AI, without teacher materials.', ['class' => 'text-muted']);
-    } else {
-        echo html_writer::tag('h3', 'AI answer grounded on teacher materials (RAG)');
+        echo html_writer::empty_tag('input', [
+            'type' => 'checkbox',
+            'name' => 'materialids[]',
+            'value' => $id,
+            'checked' => $checked ? 'checked' : null,
+        ]);
 
-        if (!empty($ragsources)) {
-            echo html_writer::tag('p', 'Retrieved sources:', ['class' => 'text-muted mb-1']);
-            echo html_writer::start_tag('ul', ['class' => 'text-muted small']);
+        echo html_writer::span(s(local_aiskillnavigator_tutor_short_title($material)), 'aisn-material-title');
+        echo html_writer::empty_tag('br');
+        echo html_writer::span(strlen((string)$material->content) . ' chars', 'aisn-badge');
 
-            foreach ($ragsources as $title => $similarity) {
-                echo html_writer::tag(
-                    'li',
-                    s($title) . ' ' . html_writer::tag('span', 'similarity: ' . $similarity, ['class' => 'badge badge-info'])
-                );
-            }
+        echo html_writer::div(
+            s(local_aiskillnavigator_tutor_excerpt((string)$material->content)),
+            'aisn-excerpt'
+        );
 
-            echo html_writer::end_tag('ul');
-        }
-
-        if ($ragdebug !== '') {
-            echo html_writer::tag('p', s($ragdebug), ['class' => 'text-muted small']);
-        }
+        echo html_writer::end_tag('label');
     }
 
-    $formattedanswer = format_text(
-        $answer,
-        FORMAT_MARKDOWN,
-        [
-            'context' => $context,
-            'trusted' => false,
-            'noclean' => false,
-            'filter' => true,
-        ]
-    );
-
-    echo html_writer::div($formattedanswer, 'ai-answer-content');
-
-    echo html_writer::end_div();
     echo html_writer::end_div();
 }
 
-echo html_writer::div(
-    html_writer::link(
-        new moodle_url('/local/aiskillnavigator/index.php', ['courseid' => $courseid]),
-        'Back to plugin home',
-        ['class' => 'btn btn-secondary mt-3']
-    )
+echo html_writer::end_div();
+
+echo html_writer::start_div('aisn-card');
+echo html_writer::tag('h3', '3. Question');
+
+echo html_writer::tag('textarea', s($question), [
+    'name' => 'question',
+    'id' => 'question',
+    'class' => 'aisn-question',
+    'placeholder' => 'Esempio: spiegami la differenza tra funzione lineare e funzione quadratica.',
+    'required' => 'required',
+]);
+
+echo html_writer::start_div('aisn-actions');
+
+echo html_writer::empty_tag('input', [
+    'type' => 'submit',
+    'class' => 'aisn-primary',
+    'value' => 'Ask AI',
+]);
+
+echo html_writer::link(
+    new moodle_url('/course/view.php', ['id' => $courseid]),
+    'Back to course',
+    ['class' => 'aisn-secondary']
 );
 
 echo html_writer::end_div();
+echo html_writer::end_div();
 
-echo html_writer::tag('style', '
-.ai-answer-card { font-size: 1rem; line-height: 1.55; }
-.ai-answer-content h2,
-.ai-answer-content h3,
-.ai-answer-content h4 { margin-top: 1.4rem; margin-bottom: 0.7rem; }
-.ai-answer-content table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-.ai-answer-content th,
-.ai-answer-content td { border: 1px solid #d8dee9; padding: 8px 10px; }
-.ai-answer-content th { background: #f3f6fb; }
-.ai-answer-content code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; }
+echo html_writer::end_div();
+echo html_writer::end_tag('form');
+
+if ($answer !== '') {
+    echo html_writer::start_div('aisn-card mt-4');
+    echo html_writer::tag('h3', 'Answer');
+
+    if (!empty($usedMaterialNames)) {
+        echo html_writer::div('Used materials: ' . s(implode(', ', $usedMaterialNames)), 'aisn-muted mb-3');
+    } else {
+        echo html_writer::div('Used materials: none', 'aisn-muted mb-3');
+    }
+
+    echo html_writer::tag('div', s($answer), ['class' => 'aisn-answer']);
+    echo html_writer::end_div();
+}
+
+echo html_writer::end_div();
+
+echo html_writer::tag('script', '
+(function() {
+    const modeRadios = document.querySelectorAll("input[name=\"source_mode\"]");
+    const panel = document.getElementById("materials-panel");
+
+    function refresh() {
+        const selected = document.querySelector("input[name=\"source_mode\"]:checked");
+
+        if (!selected || !panel) {
+            return;
+        }
+
+        const boxes = panel.querySelectorAll("input[type=\"checkbox\"]");
+
+        if (selected.value === "manual") {
+            panel.classList.add("aisn-hidden");
+            boxes.forEach(function(box) {
+                box.checked = false;
+                box.disabled = true;
+            });
+        } else {
+            panel.classList.remove("aisn-hidden");
+            boxes.forEach(function(box) {
+                box.disabled = false;
+            });
+        }
+    }
+
+    modeRadios.forEach(function(radio) {
+        radio.addEventListener("change", refresh);
+    });
+
+    refresh();
+})();
 ');
 
 echo $OUTPUT->footer();
-
-

@@ -2,6 +2,8 @@
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ui_style_helper.php');
+require_once(__DIR__ . '/../includes/course_resource_sync.php');
 require_once(__DIR__ . '/../includes/material_source_helper.php');
 
 use local_aiskillnavigator\service\embedding_service;
@@ -13,6 +15,10 @@ $courseid = optional_param('courseid', SITEID, PARAM_INT);
 $course = get_course($courseid);
 
 require_login($course);
+if (isset($courseid) && (int)$courseid > 1 && function_exists('local_aiskillnavigator_sync_course_resources')) {
+    local_aiskillnavigator_sync_course_resources((int)$courseid, (int)$USER->id, false);
+}
+
 
 $context = context_course::instance($courseid);
 
@@ -236,11 +242,11 @@ function local_aiskillnavigator_extract_json(string $raw): ?array {
     }
 
     if (empty($decoded['summary'])) {
-        $decoded['summary'] = 'Mappa mentale interattiva generata per organizzare lo studio dellÃ¢â‚¬â„¢argomento.';
+        $decoded['summary'] = 'Mappa mentale interattiva generata per organizzare lo studio dellÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢argomento.';
     }
 
     if (empty($decoded['central_description'])) {
-        $decoded['central_description'] = 'Questo ÃƒÂ¨ il concetto centrale della mappa. I rami mostrano definizione, parti principali, funzionamento e applicazioni.';
+        $decoded['central_description'] = 'Questo ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ il concetto centrale della mappa. I rami mostrano definizione, parti principali, funzionamento e applicazioni.';
     }
 
     return $decoded;
@@ -298,7 +304,7 @@ if ($generate) {
             $ragdebug = count($results) . ' RAG chunks retrieved, top similarity: ' . $results[0]->similarity;
 
             foreach ($results as $ragresult) {
-                $ragsources[$ragresult->title . ' Ã¢â‚¬â€ chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
+                $ragsources[$ragresult->title . ' ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
             }
         } else if (!empty($selectedmaterials)) {
             $warning = 'No RAG chunks found for this focus. Falling back to full material context.';
@@ -333,11 +339,12 @@ if ($generate) {
     }
 
     if ($mindmap === null) {
-        $parseerror = 'LÃ¢â‚¬â„¢AI ha restituito un JSON incompleto o non valido. Riprova con un materiale piÃƒÂ¹ piccolo o con un focus piÃƒÂ¹ specifico.';
+        $parseerror = 'LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢AI ha restituito un JSON incompleto o non valido. Riprova con un materiale piÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹ piccolo o con un focus piÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹ specifico.';
     }
 }
 
 echo $OUTPUT->header();
+local_aiskillnavigator_print_inline_styles();
 
 echo html_writer::start_div('container-fluid');
 
@@ -527,7 +534,7 @@ if ($mindmap !== null) {
             'infoTitle' => $branchtitle,
             'infoType' => 'Ramo principale',
             'infoDescription' => $branchdescription,
-            'infoHint' => 'Questo ramo organizza una parte importante dellÃ¢â‚¬â„¢argomento.',
+            'infoHint' => 'Questo ramo organizza una parte importante dellÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢argomento.',
             'title' => $branchdescription,
             'widthConstraint' => ['minimum' => 180, 'maximum' => 230],
         ];

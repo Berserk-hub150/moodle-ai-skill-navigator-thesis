@@ -1,167 +1,210 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ui_style_helper.php');
 
 global $PAGE, $OUTPUT, $USER;
 
-$courseid = optional_param('courseid', SITEID, PARAM_INT);
-$course = get_course($courseid);
+$courseid = optional_param('courseid', optional_param('id', SITEID, PARAM_INT), PARAM_INT);
 
-require_login($course);
-
-$context = context_course::instance($courseid);
+if ($courseid <= SITEID) {
+    $course = get_site();
+    $context = context_system::instance();
+    require_login();
+} else {
+    $course = get_course($courseid);
+    $context = context_course::instance($courseid);
+    require_login($course);
+}
 
 $PAGE->set_context($context);
-$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/css/styles.css'));
-$PAGE->set_url(new moodle_url('/local/aiskillnavigator/index.php', ['courseid' => $courseid]));
-$PAGE->set_title(get_string('pluginname', 'local_aiskillnavigator'));
-$PAGE->set_heading(get_string('pluginname', 'local_aiskillnavigator'));
+$PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/index.php', ['courseid' => $courseid]));
+$PAGE->set_title('AI Skill Navigator');
+$PAGE->set_heading('AI Skill Navigator');
 
-$canstudent = has_capability('local/aiskillnavigator:viewstudent', $context);
-$canteacher = has_capability('local/aiskillnavigator:viewteacher', $context);
-$canmaterials = has_capability('local/aiskillnavigator:managematerials', $context);
-$isadmin = is_siteadmin($USER);
+function local_aiskillnavigator_index_link_exists(string $relativepath): bool {
+    global $CFG;
+    return file_exists($CFG->dirroot . $relativepath);
+}
+
+function local_aiskillnavigator_index_card(
+    string $title,
+    string $description,
+    string $button,
+    string $relativepath,
+    int $courseid,
+    string $buttonclass = 'btn btn-primary'
+): string {
+    if (!local_aiskillnavigator_index_link_exists($relativepath)) {
+        return '';
+    }
+
+    $html = html_writer::start_div('card mb-3');
+    $html .= html_writer::start_div('card-body');
+    $html .= html_writer::tag('h3', s($title));
+    $html .= html_writer::tag('p', s($description), ['class' => 'text-muted']);
+
+    $params = [];
+
+    if ($courseid > SITEID) {
+        $params['courseid'] = $courseid;
+    }
+
+    $html .= html_writer::link(
+        new moodle_url($relativepath, $params),
+        s($button),
+        ['class' => $buttonclass]
+    );
+
+    $html .= html_writer::end_div();
+    $html .= html_writer::end_div();
+
+    return $html;
+}
+
+$canstudent = $courseid > SITEID && has_capability('local/aiskillnavigator:viewstudent', $context);
+$canteacher = $courseid > SITEID && has_capability('local/aiskillnavigator:viewteacher', $context);
+$canmaterials = $courseid > SITEID && has_capability('local/aiskillnavigator:managematerials', $context);
+
+$isadmin = is_siteadmin();
+
+if ($isadmin) {
+    $canstudent = true;
+    $canteacher = true;
+    $canmaterials = true;
+}
 
 echo $OUTPUT->header();
+local_aiskillnavigator_print_inline_styles();
 
 echo html_writer::start_div('container-fluid');
 
-echo html_writer::tag('h2', get_string('pluginname', 'local_aiskillnavigator'));
+echo html_writer::tag('h2', 'AI Skill Navigator');
 
 echo html_writer::tag(
     'p',
-    'Prototype Moodle plugin for AI-supported learning paths, grounded course tutoring, interactive quizzes, mind maps and teacher analytics.',
+    'Moodle plugin for AI-supported tutoring, course materials, quizzes, mind maps, diagnostic assessments and teacher analytics.',
     ['class' => 'lead']
 );
 
-echo html_writer::tag(
-    'p',
-    'Course: ' . s($course->fullname),
-    ['class' => 'text-muted']
-);
+echo html_writer::tag('p', 'Course: ' . s($course->fullname), ['class' => 'text-muted']);
 
-if ($isadmin) {
+if ($isadmin && $courseid > SITEID) {
     echo html_writer::div(
-        'You are logged in as site administrator. Moodle administrators can see both student and teacher tools. To test role separation, use a real student account and a real teacher account enrolled in this course.',
+        'You are logged in as site administrator, so both student and teacher tools are visible.',
         'alert alert-info'
     );
 }
 
-if (!$canstudent && !$canteacher && !$canmaterials) {
+if ($courseid <= SITEID) {
     echo html_writer::div(
-        'No AI Skill Navigator tools are available for your current role in this course.',
+        'Open this plugin from inside a Moodle course to use course-aware AI tools.',
         'alert alert-warning'
     );
-
-    echo html_writer::end_div();
-    echo $OUTPUT->footer();
-    exit;
 }
 
-echo html_writer::start_div('row mt-4');
+echo html_writer::start_div('row');
 
 if ($canstudent) {
-    echo html_writer::start_div('col-md-4 mb-3');
-    echo html_writer::start_div('card h-100');
-    echo html_writer::start_div('card-body');
-    echo html_writer::tag('h4', 'Student dashboard', ['class' => 'card-title']);
-    echo html_writer::tag('p', 'View your quiz attempts, average score, best score and personalised recommendations.', ['class' => 'card-text']);
-    echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/pages/student.php', ['courseid' => $courseid]),
-        'Open student dashboard',
-        ['class' => 'btn btn-primary']
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'AI assessments',
+        'Open the initial diagnostic quiz and final test published by the teacher.',
+        'Open AI assessments',
+        '/local/aiskillnavigator/pages/assessment.php',
+        $courseid,
+        'btn btn-success'
     );
     echo html_writer::end_div();
-    echo html_writer::end_div();
-    echo html_writer::end_div();
 
-    echo html_writer::start_div('col-md-4 mb-3');
-    echo html_writer::start_div('card h-100');
-    echo html_writer::start_div('card-body');
-    echo html_writer::tag('h4', 'Course AI Tutor', ['class' => 'card-title']);
-    echo html_writer::tag('p', 'Ask questions grounded on the teacher materials saved in the course knowledge base.', ['class' => 'card-text']);
-    echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/pages/tutor.php', ['courseid' => $courseid]),
-        'Open Course Tutor',
-        ['class' => 'btn btn-primary']
-    );
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-
-    echo html_writer::start_div('col-md-4 mb-3');
-    echo html_writer::start_div('card h-100');
-    echo html_writer::start_div('card-body');
-    echo html_writer::tag('h4', 'AI Quiz Generator', ['class' => 'card-title']);
-    echo html_writer::tag('p', 'Generate an AI micro-test, answer it, and save the result in your student profile.', ['class' => 'card-text']);
-    echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/pages/quizgenerator.php', ['courseid' => $courseid]),
-        'Open Quiz Generator',
-        ['class' => 'btn btn-primary']
-    );
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-
-    echo html_writer::start_div('col-md-4 mb-3');
-    echo html_writer::start_div('card h-100');
-    echo html_writer::start_div('card-body');
-    echo html_writer::tag('h4', 'AI Mind Map Generator', ['class' => 'card-title']);
-    echo html_writer::tag('p', 'Generate an interactive draggable mind map from an AI-generated concept structure.', ['class' => 'card-text']);
-    echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/pages/mindmapgenerator.php', ['courseid' => $courseid]),
-        'Open Mind Map Generator',
-        ['class' => 'btn btn-primary']
-    );
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-
-    echo html_writer::start_div('col-md-4 mb-3');
-    echo html_writer::start_div('card h-100');
-    echo html_writer::start_div('card-body');
-    echo html_writer::tag('h4', 'General AI Tutor', ['class' => 'card-title']);
-    echo html_writer::tag('p', 'Ask general AI questions about course-related topics.', ['class' => 'card-text']);
-    echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/pages/tutor.php', ['courseid' => $courseid]),
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'AI Tutor',
+        'Ask questions with no material, or select exactly which course materials the AI can use.',
         'Open AI Tutor',
-        ['class' => 'btn btn-primary']
+        '/local/aiskillnavigator/pages/tutor.php',
+        $courseid
     );
     echo html_writer::end_div();
+
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'AI Quiz',
+        'Generate an AI micro-quiz from a topic or selected course materials.',
+        'Open AI Quiz',
+        '/local/aiskillnavigator/pages/quizgenerator.php',
+        $courseid
+    );
     echo html_writer::end_div();
+
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'AI Mind Map',
+        'Generate an interactive mind map from a topic or selected course materials.',
+        'Open AI Mind Map',
+        '/local/aiskillnavigator/pages/mindmapgenerator.php',
+        $courseid
+    );
     echo html_writer::end_div();
 }
 
-if ($canteacher) {
-    echo html_writer::start_div('col-md-4 mb-3');
-    echo html_writer::start_div('card h-100 border-info');
-    echo html_writer::start_div('card-body');
-    echo html_writer::tag('h4', 'Teacher dashboard', ['class' => 'card-title']);
-    echo html_writer::tag('p', 'View class performance, student progress, weak topics and students at risk.', ['class' => 'card-text']);
-    echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/pages/teacher.php', ['courseid' => $courseid]),
-        'Open teacher dashboard',
-        ['class' => 'btn btn-info']
+
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'Adaptive review',
+        'Review weak skills detected from previous quiz and test answers.',
+        'Open adaptive review',
+        '/local/aiskillnavigator/pages/adaptive_review.php',
+        $courseid,
+        'btn btn-warning'
     );
     echo html_writer::end_div();
+
+if ($canteacher) {
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'Teacher dashboard',
+        'View class performance, student progress, weak topics and course analytics.',
+        'Open teacher dashboard',
+        '/local/aiskillnavigator/pages/teacher.php',
+        $courseid,
+        'btn btn-info'
+    );
     echo html_writer::end_div();
+
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'Initial/final tests',
+        'Create an initial diagnostic quiz and a final test from course materials.',
+        'Open initial/final tests',
+        '/local/aiskillnavigator/pages/teacher_assessments.php',
+        $courseid,
+        'btn btn-success'
+    );
+    echo html_writer::end_div();
+
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'Learning-gap analysis',
+        'Analyze pre-test and final-test attempts to identify weak skills and remediation actions.',
+        'Open learning-gap analysis',
+        '/local/aiskillnavigator/pages/gap_analysis.php',
+        $courseid,
+        'btn btn-warning'
+    );
     echo html_writer::end_div();
 }
 
 if ($canmaterials) {
-    echo html_writer::start_div('col-md-4 mb-3');
-    echo html_writer::start_div('card h-100 border-info');
-    echo html_writer::start_div('card-body');
-    echo html_writer::tag('h4', 'Teacher Materials', ['class' => 'card-title']);
-    echo html_writer::tag('p', 'Upload PowerPoint slides or text files. The Course AI Tutor uses the extracted text.', ['class' => 'card-text']);
-    echo html_writer::link(
-        new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', ['courseid' => $courseid]),
-        'Manage materials',
-        ['class' => 'btn btn-info']
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'Course materials / RAG',
+        'Manage course materials and automatically synchronized Moodle resources used by the AI.',
+        'Open course materials / RAG',
+        '/local/aiskillnavigator/pages/teacher_materials.php',
+        $courseid,
+        'btn btn-success'
     );
-    echo html_writer::end_div();
-    echo html_writer::end_div();
     echo html_writer::end_div();
 }
 
@@ -170,5 +213,3 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo $OUTPUT->footer();
-
-
