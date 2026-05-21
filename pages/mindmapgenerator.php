@@ -1,441 +1,598 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
 require_once(__DIR__ . '/../includes/ui_style_helper.php');
 require_once(__DIR__ . '/../includes/course_resource_sync.php');
 require_once(__DIR__ . '/../includes/material_source_helper.php');
 
-use local_aiskillnavigator\service\embedding_service;
-use local_aiskillnavigator\service\real_ai_service;
+global $DB, $PAGE, $OUTPUT, $USER;
 
-global $PAGE, $OUTPUT, $DB;
+$courseid = optional_param('courseid', optional_param('id', SITEID, PARAM_INT), PARAM_INT);
+$generate = optional_param('generate', 0, PARAM_BOOL);
+$topic = optional_param('topic', '', PARAM_RAW_TRIMMED);
+$difficulty = optional_param('difficulty', 'medium', PARAM_ALPHA);
 
-$courseid = optional_param('courseid', SITEID, PARAM_INT);
 $course = get_course($courseid);
 
 require_login($course);
-if (isset($courseid) && (int)$courseid > 1 && function_exists('local_aiskillnavigator_sync_course_resources')) {
+
+$context = context_course::instance($courseid);
+require_capability('local/aiskillnavigator:viewstudent', $context);
+
+if (function_exists('local_aiskillnavigator_sync_course_resources')) {
     local_aiskillnavigator_sync_course_resources((int)$courseid, (int)$USER->id, false);
 }
 
-
-$context = context_course::instance($courseid);
-
-require_capability('local/aiskillnavigator:viewstudent', $context);
-
 $PAGE->set_context($context);
-$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/css/styles.css'));
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/mindmapgenerator.php', ['courseid' => $courseid]));
-$PAGE->set_title(get_string('mindmapgenerator', 'local_aiskillnavigator'));
-$PAGE->set_heading(get_string('mindmapgenerator', 'local_aiskillnavigator'));
+$PAGE->set_title('AI Mind Map Generator');
+$PAGE->set_heading('AI Mind Map Generator');
 
-$topic = optional_param('topic', '', PARAM_TEXT);
+function local_aiskillnavigator_mm_bad_score(string $text): int {
+    $bad = ['Ã', 'Â', 'â€', 'â€™', 'â€œ', 'â€', 'â€“', 'â€”', '�', 'Æ', 'ƒ'];
+    $score = 0;
 
-// -1 = manual topic.
-//  0 = all readable teacher materials.
-// >0 = selected teacher material.
-$materialid = optional_param('materialid', -1, PARAM_INT);
-
-$generate = optional_param('generate', 0, PARAM_BOOL);
-
-$result = '';
-$mindmap = null;
-$parseerror = '';
-$warning = '';
-$ragdebug = '';
-$ragsources = [];
-$selectedmaterials = [];
-
-$materials = $DB->get_records(
-    'local_aiskillnav_material',
-    ['courseid' => $courseid],
-    'timecreated DESC'
-);
-
-$readablematerials = [];
-
-foreach ($materials as $material) {
-    $content = trim((string) ($material->content ?? ''));
-
-    if ($content !== '') {
-        $readablematerials[(int) $material->id] = $material;
+    foreach ($bad as $token) {
+        $score += substr_count($text, $token);
     }
+
+    return $score;
 }
 
-$embeddingservice = new embedding_service();
-$totalchunks = $embeddingservice->count_indexed_chunks($courseid);
+function local_aiskillnavigator_mm_clean_text(string $text, string $fallback = ''): string {
+    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
-$sourcemode = local_aiskillnavigator_material_source_mode_from_request(-1);
-$selectedmaterialids = local_aiskillnavigator_material_source_selected_ids_from_request($readablematerials);
-$selectedmaterials = local_aiskillnavigator_material_source_selected_materials($readablematerials, $sourcemode, $selectedmaterialids);
-$materialid = local_aiskillnavigator_material_source_legacy_materialid($sourcemode, $selectedmaterialids);
+    $map = [
+        'ÃƒÂ ' => 'à',
+        'ÃƒÂ¨' => 'è',
+        'ÃƒÂ©' => 'é',
+        'ÃƒÂ¬' => 'ì',
+        'ÃƒÂ²' => 'ò',
+        'ÃƒÂ¹' => 'ù',
+        'Ã ' => 'à',
+        'Ã¨' => 'è',
+        'Ã©' => 'é',
+        'Ã¬' => 'ì',
+        'Ã²' => 'ò',
+        'Ã¹' => 'ù',
+        'Ã€' => 'À',
+        'Ãˆ' => 'È',
+        'Ã‰' => 'É',
+        'ÃŒ' => 'Ì',
+        'Ã’' => 'Ò',
+        'Ã™' => 'Ù',
+        'â€™' => "'",
+        'â€˜' => "'",
+        'â€œ' => '"',
+        'â€' => '"',
+        'â€“' => '-',
+        'â€”' => '-',
+        'â€¦' => '...',
+        'Â«' => '«',
+        'Â»' => '»',
+        'Â°' => '°',
+        'Â' => '',
+        'Ã‚' => '',
+    ];
 
-if ($sourcemode === 'selected' && empty($selectedmaterialids)) {
-    $warning = 'Select at least one teacher material or switch to all course materials.';
+    for ($i = 0; $i < 5; $i++) {
+        $text = str_replace(array_keys($map), array_values($map), $text);
+    }
+
+    $text = preg_replace('/[ \t]+/', ' ', $text);
+    $text = preg_replace("/\r\n|\r/", "\n", $text);
+    $text = trim($text);
+
+    if ($text === '') {
+        return $fallback;
+    }
+
+    if (local_aiskillnavigator_mm_bad_score($text) > 0) {
+        return $fallback !== '' ? $fallback : 'Descrizione sintetica del concetto selezionato.';
+    }
+
+    return $text;
 }
 
-function local_aiskillnavigator_clean_ai_json_response(string $raw): string {
-    $clean = trim($raw);
+function local_aiskillnavigator_mm_clean_array($value, string $fallback = '') {
+    if (is_string($value)) {
+        return local_aiskillnavigator_mm_clean_text($value, $fallback);
+    }
 
-    $clean = preg_replace('/^```json\s*/i', '', $clean);
-    $clean = preg_replace('/^```\s*/i', '', $clean);
-    $clean = preg_replace('/\s*```$/', '', $clean);
-    $clean = trim($clean);
+    if (is_array($value)) {
+        foreach ($value as $key => $item) {
+            $value[$key] = local_aiskillnavigator_mm_clean_array($item, $fallback);
+        }
 
-    $start = strpos($clean, '{');
+        return $value;
+    }
 
-    if ($start === false) {
+    if (is_object($value)) {
+        foreach ($value as $key => $item) {
+            $value->$key = local_aiskillnavigator_mm_clean_array($item, $fallback);
+        }
+
+        return $value;
+    }
+
+    return $value;
+}
+
+function local_aiskillnavigator_mm_call_ai(string $prompt, string $systemprompt): string {
+    try {
+        if (class_exists('\local_aiskillnavigator\service\ai_provider_factory')) {
+            $provider = \local_aiskillnavigator\service\ai_provider_factory::create_from_config();
+            return $provider->generate($prompt, 2600, $systemprompt);
+        }
+
+        if (
+            class_exists('\local_aiskillnavigator\service\provider\ai_provider_config') &&
+            class_exists('\local_aiskillnavigator\service\provider\ai_provider_selector')
+        ) {
+            $config = new \local_aiskillnavigator\service\provider\ai_provider_config();
+            $selector = new \local_aiskillnavigator\service\provider\ai_provider_selector();
+            $provider = $selector->create($config);
+            return $provider->generate($prompt, 2600, $systemprompt);
+        }
+    } catch (Throwable $e) {
         return '';
     }
 
-    $clean = substr($clean, $start);
-    $clean = trim($clean);
-
-    $lastbrace = strrpos($clean, '}');
-
-    if ($lastbrace !== false) {
-        $possiblejson = substr($clean, 0, $lastbrace + 1);
-        $decoded = json_decode($possiblejson, true);
-
-        if (is_array($decoded)) {
-            return $possiblejson;
-        }
-    }
-
-    return local_aiskillnavigator_repair_json($clean);
+    return '';
 }
 
-function local_aiskillnavigator_repair_json(string $json): string {
-    $json = trim($json);
+function local_aiskillnavigator_mm_extract_json(string $raw): ?array {
+    $raw = trim($raw);
+    $raw = preg_replace('/^```json\s*/i', '', $raw);
+    $raw = preg_replace('/^```\s*/', '', $raw);
+    $raw = preg_replace('/```\s*$/', '', $raw);
 
-    $json = preg_replace('/,\s*([}\]])/', '$1', $json);
+    $start = strpos($raw, '{');
+    $end = strrpos($raw, '}');
 
-    $stack = [];
-    $instring = false;
-    $escaped = false;
-    $length = strlen($json);
+    if ($start !== false && $end !== false && $end > $start) {
+        $raw = substr($raw, $start, $end - $start + 1);
+    }
 
-    for ($i = 0; $i < $length; $i++) {
-        $char = $json[$i];
+    $data = json_decode($raw, true);
 
-        if ($escaped) {
-            $escaped = false;
-            continue;
-        }
+    if (!is_array($data)) {
+        return null;
+    }
 
-        if ($char === '\\' && $instring) {
-            $escaped = true;
-            continue;
-        }
+    return local_aiskillnavigator_mm_clean_array($data);
+}
 
-        if ($char === '"') {
-            $instring = !$instring;
-            continue;
-        }
+function local_aiskillnavigator_mm_fallback(string $topic): array {
+    $topic = local_aiskillnavigator_mm_clean_text($topic, 'Argomento');
 
-        if ($instring) {
-            continue;
-        }
+    return [
+        'title' => $topic,
+        'subtitle' => 'Mappa concettuale generata automaticamente',
+        'center' => $topic,
+        'branches' => [
+            [
+                'title' => 'Concetti principali',
+                'summary' => 'Raccoglie le idee fondamentali da conoscere per comprendere l argomento.',
+                'children' => [
+                    ['title' => 'Definizione', 'summary' => 'Spiega il significato generale del concetto.'],
+                    ['title' => 'Elementi base', 'summary' => 'Indica le parti principali che compongono l argomento.'],
+                ],
+            ],
+            [
+                'title' => 'Esempi',
+                'summary' => 'Mostra casi pratici e situazioni in cui il concetto viene applicato.',
+                'children' => [
+                    ['title' => 'Caso semplice', 'summary' => 'Un esempio introduttivo utile per iniziare.'],
+                    ['title' => 'Caso avanzato', 'summary' => 'Un esempio più completo per approfondire.'],
+                ],
+            ],
+            [
+                'title' => 'Collegamenti',
+                'summary' => 'Evidenzia relazioni con altri concetti del corso.',
+                'children' => [
+                    ['title' => 'Prerequisiti', 'summary' => 'Conoscenze utili prima di studiare questo tema.'],
+                    ['title' => 'Applicazioni', 'summary' => 'Possibili usi del concetto in esercizi o progetti.'],
+                ],
+            ],
+            [
+                'title' => 'Ripasso',
+                'summary' => 'Suggerisce i punti da rivedere per consolidare l apprendimento.',
+                'children' => [
+                    ['title' => 'Domande guida', 'summary' => 'Domande utili per verificare la comprensione.'],
+                    ['title' => 'Errori comuni', 'summary' => 'Aspetti a cui prestare attenzione durante lo studio.'],
+                ],
+            ],
+        ],
+    ];
+}
 
-        if ($char === '{') {
-            $stack[] = '}';
-        } else if ($char === '[') {
-            $stack[] = ']';
-        } else if ($char === '}' || $char === ']') {
-            if (!empty($stack) && end($stack) === $char) {
-                array_pop($stack);
+function local_aiskillnavigator_mm_normalize(array $data, string $topic): array {
+    $fallback = local_aiskillnavigator_mm_fallback($topic);
+
+    $title = local_aiskillnavigator_mm_clean_text((string)($data['title'] ?? ''), $fallback['title']);
+    $subtitle = local_aiskillnavigator_mm_clean_text((string)($data['subtitle'] ?? ''), $fallback['subtitle']);
+    $center = local_aiskillnavigator_mm_clean_text((string)($data['center'] ?? ''), $topic !== '' ? $topic : $fallback['center']);
+
+    $branches = [];
+
+    if (!empty($data['branches']) && is_array($data['branches'])) {
+        foreach (array_values($data['branches']) as $branch) {
+            if (!is_array($branch)) {
+                continue;
             }
+
+            $bt = local_aiskillnavigator_mm_clean_text((string)($branch['title'] ?? ''), 'Concetto');
+            $bs = local_aiskillnavigator_mm_clean_text((string)($branch['summary'] ?? ''), 'Questo ramo riassume un concetto importante della mappa.');
+
+            $children = [];
+
+            if (!empty($branch['children']) && is_array($branch['children'])) {
+                foreach (array_values($branch['children']) as $child) {
+                    if (is_array($child)) {
+                        $children[] = [
+                            'title' => local_aiskillnavigator_mm_clean_text((string)($child['title'] ?? ''), 'Sotto-concetto'),
+                            'summary' => local_aiskillnavigator_mm_clean_text((string)($child['summary'] ?? ''), 'Questo nodo approfondisce un aspetto collegato.'),
+                        ];
+                    }
+                }
+            }
+
+            $branches[] = [
+                'title' => $bt,
+                'summary' => $bs,
+                'children' => array_slice($children, 0, 4),
+            ];
         }
     }
 
-    while (!empty($stack)) {
-        $json .= array_pop($stack);
+    if (empty($branches)) {
+        $branches = $fallback['branches'];
     }
 
-    return $json;
+    return [
+        'title' => $title,
+        'subtitle' => $subtitle,
+        'center' => $center,
+        'branches' => array_slice($branches, 0, 7),
+    ];
 }
 
-function local_aiskillnavigator_extract_json(string $raw): ?array {
-    $clean = local_aiskillnavigator_clean_ai_json_response($raw);
+function local_aiskillnavigator_mm_material_context(array $materials): string {
+    $parts = [];
 
-    if ($clean === '') {
-        return null;
-    }
+    foreach ($materials as $material) {
+        $title = local_aiskillnavigator_material_source_clean_title($material);
+        $content = local_aiskillnavigator_mm_clean_text((string)$material->content, '');
 
-    $decoded = json_decode($clean, true);
-
-    if (!is_array($decoded)) {
-        return null;
-    }
-
-    if (empty($decoded['central_topic'])) {
-        if (!empty($decoded['topic'])) {
-            $decoded['central_topic'] = $decoded['topic'];
-        } else if (!empty($decoded['title'])) {
-            $decoded['central_topic'] = $decoded['title'];
-        } else {
-            $decoded['central_topic'] = 'Materiali del docente';
+        if (core_text::strlen($content) > 4500) {
+            $content = core_text::substr($content, 0, 4500) . "\n[contenuto tagliato]";
         }
+
+        $parts[] = "Materiale: " . $title . "\n" . $content;
     }
 
-    if (empty($decoded['branches']) || !is_array($decoded['branches'])) {
-        return null;
+    return implode("\n\n---\n\n", $parts);
+}
+
+function local_aiskillnavigator_mm_generate(array $materials, string $topic, string $difficulty): array {
+    $topic = local_aiskillnavigator_mm_clean_text($topic, '');
+    $context = local_aiskillnavigator_mm_material_context($materials);
+
+    $system = 'You generate clean UTF-8 JSON for a Moodle mind map. Return only valid JSON. No markdown. No code fences. Use normal Italian text. Avoid special smart quotes. Use only this schema: {"title":"...","subtitle":"...","center":"...","branches":[{"title":"...","summary":"...","children":[{"title":"...","summary":"..."}]}]}.';
+
+    $prompt = "Crea una mappa mentale didattica in italiano.\n";
+    $prompt .= "Difficolta: " . $difficulty . "\n";
+    $prompt .= "Argomento/focus: " . ($topic !== '' ? $topic : 'contenuto dei materiali') . "\n\n";
+
+    if ($context !== '') {
+        $prompt .= "Usa questi materiali del corso come base. Non inventare contenuti non presenti se i materiali sono insufficienti:\n\n";
+        $prompt .= $context . "\n\n";
+    } else {
+        $prompt .= "Genera la mappa dal solo argomento indicato.\n\n";
     }
 
-    $decoded['branches'] = array_slice(array_values($decoded['branches']), 0, 4);
+    $prompt .= "Regole obbligatorie:\n";
+    $prompt .= "- JSON valido e basta.\n";
+    $prompt .= "- 4-7 rami principali.\n";
+    $prompt .= "- 2-4 figli per ramo.\n";
+    $prompt .= "- Testi brevi e puliti.\n";
+    $prompt .= "- Niente caratteri strani, niente markdown, niente HTML.\n";
 
-    foreach ($decoded['branches'] as $branchindex => $branch) {
-        if (is_string($branch)) {
-            $branch = [
-                'title' => $branch,
-                'description' => 'Ramo principale collegato a ' . $decoded['central_topic'] . '.',
-                'children' => [],
+    $raw = local_aiskillnavigator_mm_call_ai($prompt, $system);
+    $parsed = local_aiskillnavigator_mm_extract_json($raw);
+
+    if (!$parsed) {
+        return local_aiskillnavigator_mm_fallback($topic !== '' ? $topic : 'Mappa mentale');
+    }
+
+    return local_aiskillnavigator_mm_normalize($parsed, $topic !== '' ? $topic : 'Mappa mentale');
+}
+
+function local_aiskillnavigator_mm_flatten(array $map): array {
+    $nodes = [];
+    $edges = [];
+
+    $nodes[] = [
+        'id' => 'center',
+        'title' => $map['center'],
+        'summary' => 'Nodo centrale della mappa.',
+        'type' => 'center',
+        'x' => 50,
+        'y' => 50,
+    ];
+
+    $branches = array_values($map['branches']);
+    $branchcount = max(1, count($branches));
+    $radius = 35;
+
+    foreach ($branches as $i => $branch) {
+        $angle = (-90 + ($i * (360 / $branchcount))) * pi() / 180;
+        $x = 50 + cos($angle) * $radius;
+        $y = 50 + sin($angle) * $radius;
+
+        $bid = 'b' . $i;
+
+        $nodes[] = [
+            'id' => $bid,
+            'title' => $branch['title'],
+            'summary' => $branch['summary'],
+            'type' => 'branch',
+            'x' => round($x, 2),
+            'y' => round($y, 2),
+        ];
+
+        $edges[] = ['from' => 'center', 'to' => $bid];
+
+        $children = array_values($branch['children'] ?? []);
+        $childcount = max(1, count($children));
+
+        foreach ($children as $j => $child) {
+            $offset = ($j - (($childcount - 1) / 2)) * 12;
+            $cx = 50 + cos($angle) * ($radius + 20) + cos($angle + pi() / 2) * $offset;
+            $cy = 50 + sin($angle) * ($radius + 20) + sin($angle + pi() / 2) * $offset;
+
+            $cid = 'b' . $i . 'c' . $j;
+
+            $nodes[] = [
+                'id' => $cid,
+                'title' => $child['title'],
+                'summary' => $child['summary'],
+                'type' => 'child',
+                'x' => round($cx, 2),
+                'y' => round($cy, 2),
             ];
 
-            $decoded['branches'][$branchindex] = $branch;
-        }
-
-        if (!is_array($branch)) {
-            return null;
-        }
-
-        if (empty($branch['title'])) {
-            $decoded['branches'][$branchindex]['title'] = 'Ramo principale';
-        }
-
-        if (empty($branch['description'])) {
-            $decoded['branches'][$branchindex]['description'] = 'Concetto collegato a ' . ($decoded['central_topic'] ?? 'questo argomento') . '.';
-        }
-
-        if (empty($branch['children']) || !is_array($branch['children'])) {
-            $decoded['branches'][$branchindex]['children'] = [];
-        }
-
-        $decoded['branches'][$branchindex]['children'] = array_slice(array_values($decoded['branches'][$branchindex]['children']), 0, 2);
-
-        foreach ($decoded['branches'][$branchindex]['children'] as $childindex => $child) {
-            if (is_string($child)) {
-                $decoded['branches'][$branchindex]['children'][$childindex] = [
-                    'title' => $child,
-                    'description' => 'Sotto-concetto utile per approfondire il ramo "' . $decoded['branches'][$branchindex]['title'] . '".',
-                ];
-            } else if (is_array($child)) {
-                if (empty($child['title'])) {
-                    $decoded['branches'][$branchindex]['children'][$childindex]['title'] = 'Dettaglio';
-                }
-
-                if (empty($child['description'])) {
-                    $decoded['branches'][$branchindex]['children'][$childindex]['description'] = 'Dettaglio utile per comprendere meglio "' . $decoded['branches'][$branchindex]['title'] . '".';
-                }
-            } else {
-                $decoded['branches'][$branchindex]['children'][$childindex] = [
-                    'title' => 'Dettaglio',
-                    'description' => 'Dettaglio utile per approfondire il ramo.',
-                ];
-            }
+            $edges[] = ['from' => $bid, 'to' => $cid];
         }
     }
 
-    if (empty($decoded['title'])) {
-        $decoded['title'] = ($decoded['central_topic'] ?? 'Argomento') . ' - Mappa mentale';
-    }
-
-    if (empty($decoded['summary'])) {
-        $decoded['summary'] = 'Mappa mentale interattiva generata per organizzare lo studio dellÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢argomento.';
-    }
-
-    if (empty($decoded['central_description'])) {
-        $decoded['central_description'] = 'Questo ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ il concetto centrale della mappa. I rami mostrano definizione, parti principali, funzionamento e applicazioni.';
-    }
-
-    return $decoded;
+    return [$nodes, $edges];
 }
 
-function local_aiskillnavigator_short_label(string $text): string {
-    $text = trim($text);
-    $text = preg_replace('/\s+/', ' ', $text);
+$readablematerials = local_aiskillnavigator_material_source_get_readable_materials((int)$courseid);
+$sourcemode = local_aiskillnavigator_material_source_mode_from_request(-1);
+$selectedmaterialids = local_aiskillnavigator_material_source_selected_ids_from_request($readablematerials);
 
-    if (core_text::strlen($text) > 30) {
-        $text = core_text::substr($text, 0, 27) . '...';
-    }
-
-    return $text;
+if ($sourcemode === 'all') {
+    $sourcemode = 'selected';
 }
 
-function local_aiskillnavigator_clean_info(string $text): string {
-    $text = trim($text);
-    $text = preg_replace('/\s+/', ' ', $text);
+$selectedmaterials = local_aiskillnavigator_material_source_selected_materials(
+    $readablematerials,
+    $sourcemode,
+    $selectedmaterialids
+);
 
-    if ($text === '') {
-        return 'Nessuna descrizione disponibile.';
-    }
-
-    return $text;
-}
-
-function local_aiskillnavigator_material_short_title(stdClass $material): string {
-    $title = trim((string) ($material->title ?? 'Materiale senza titolo'));
-
-    if ($title === '') {
-        $title = 'Materiale senza titolo';
-    }
-
-    $contentlength = strlen((string) ($material->content ?? ''));
-
-    return $title . ' (' . $contentlength . ' chars)';
-}
+$error = '';
+$map = null;
 
 if ($generate) {
-    $selectedmaterials = local_aiskillnavigator_material_source_selected_materials($readablematerials, $sourcemode, $selectedmaterialids);
-
-    $service = new real_ai_service();
-
-    if ($sourcemode === 'manual') {
-        $fallbacktopic = $topic !== '' ? $topic : 'Digital Twin';
-        $result = $service->generate_mindmap($fallbacktopic);
-    } else if ($totalchunks > 0) {
-        $searchquery = $topic !== '' ? $topic : 'concept map based on course materials';
-        $results = local_aiskillnavigator_material_source_search($embeddingservice, $searchquery, $courseid, 6, $sourcemode, $selectedmaterialids);
-
-        if (!empty($results)) {
-            $ragcontext = $embeddingservice->build_context($results, 6500);
-            $result = $service->generate_mindmap_with_rag_context($topic, $ragcontext);
-            $ragdebug = count($results) . ' RAG chunks retrieved, top similarity: ' . $results[0]->similarity;
-
-            foreach ($results as $ragresult) {
-                $ragsources[$ragresult->title . ' ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â chunk ' . (((int) $ragresult->chunkindex) + 1)] = $ragresult->similarity;
-            }
-        } else if (!empty($selectedmaterials)) {
-            $warning = 'No RAG chunks found for this focus. Falling back to full material context.';
-            $result = $service->generate_mindmap_from_course_materials($topic, $selectedmaterials);
-        } else {
-            $warning = 'No RAG chunks found. Falling back to manual topic generation.';
-            $result = $service->generate_mindmap($topic !== '' ? $topic : 'Digital Twin');
-        }
-    } else if (!empty($selectedmaterials)) {
-        $warning = 'Teacher materials exist but are not indexed for RAG yet. Falling back to full material context.';
-        $result = $service->generate_mindmap_from_course_materials($topic, $selectedmaterials);
+    if ($sourcemode === 'manual' && trim($topic) === '') {
+        $error = 'Inserisci un argomento oppure seleziona materiali del corso.';
+    } else if ($sourcemode === 'selected' && empty($selectedmaterials)) {
+        $error = 'Seleziona almeno un materiale consentito oppure usa Question/topic only.';
     } else {
-        $fallbacktopic = $topic !== '' ? $topic : 'Digital Twin';
-        $result = $service->generate_mindmap($fallbacktopic);
-    }
-
-    $mindmap = local_aiskillnavigator_extract_json($result);
-
-    if ($mindmap === null) {
-        if ($sourcemode !== 'manual' && $totalchunks > 0) {
-            $searchquery = $topic !== '' ? $topic : 'concept map based on course materials';
-        $results = local_aiskillnavigator_material_source_search($embeddingservice, $searchquery, $courseid, 6, $sourcemode, $selectedmaterialids);
-            $ragcontext = $embeddingservice->build_context($results, 6500);
-            $result = $service->generate_mindmap_with_rag_context($topic, $ragcontext);
-        } else {
-            $result = !empty($selectedmaterials)
-                ? $service->generate_mindmap_from_course_materials($topic, $selectedmaterials)
-                : $service->generate_mindmap($topic !== '' ? $topic : 'Digital Twin');
-        }
-
-        $mindmap = local_aiskillnavigator_extract_json($result);
-    }
-
-    if ($mindmap === null) {
-        $parseerror = 'LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢AI ha restituito un JSON incompleto o non valido. Riprova con un materiale piÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹ piccolo o con un focus piÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹ specifico.';
+        $map = local_aiskillnavigator_mm_generate($selectedmaterials, $topic, $difficulty);
     }
 }
 
 echo $OUTPUT->header();
 local_aiskillnavigator_print_inline_styles();
 
+echo html_writer::tag('style', '
+.aisn-mm-wrap {
+    background: #f8fbff;
+    border: 1px solid #dbeafe;
+    border-radius: 24px;
+    padding: 26px;
+    margin-top: 24px;
+}
+.aisn-mm-head {
+    text-align: center;
+    margin-bottom: 18px;
+}
+.aisn-mm-titlebar {
+    background: linear-gradient(135deg, #0f6cbf 0%, #2b82d9 55%, #68b3ff 100%);
+    color: white;
+    border-radius: 22px;
+    padding: 24px 28px;
+    margin-bottom: 18px;
+    box-shadow: 0 18px 40px rgba(15, 108, 191, 0.20);
+}
+.aisn-mm-titlebar h2 {
+    color: white !important;
+    margin: 0;
+}
+.aisn-mm-controls {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 16px 0 4px 0;
+}
+.aisn-mm-controls button {
+    border: 0;
+    background: #e2e8f0;
+    color: #0f172a;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-weight: 800;
+}
+.aisn-mm-controls button:hover {
+    background: #cbd5e1;
+}
+.aisn-mm-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(300px, .9fr);
+    gap: 22px;
+}
+.aisn-mm-canvas {
+    position: relative;
+    height: 640px;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid #dbe3ef;
+    border-radius: 22px;
+    cursor: grab;
+    touch-action: none;
+}
+.aisn-mm-canvas.is-panning {
+    cursor: grabbing;
+}
+.aisn-mm-canvas svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.aisn-mm-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    border: 2px solid #1a73e8;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 9px 14px;
+    min-width: 135px;
+    max-width: 200px;
+    text-align: center;
+    font-weight: 800;
+    color: #172033;
+    box-shadow: 0 10px 22px rgba(15, 23, 42, .13);
+    cursor: grab;
+    transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+    font-size: 13px;
+    user-select: none;
+    z-index: 2;
+}
+.aisn-mm-node:hover,
+.aisn-mm-node.is-active {
+    background: #eaf3ff;
+    box-shadow: 0 14px 26px rgba(15, 23, 42, .18);
+}
+.aisn-mm-node.center {
+    background: #1a73e8;
+    color: #ffffff;
+    font-size: 18px;
+    min-width: 190px;
+}
+.aisn-mm-node.child {
+    border-color: #94a3b8;
+    font-weight: 650;
+    font-size: 12px;
+}
+.aisn-mm-panel {
+    background: #ffffff;
+    border: 1px solid #dbe3ef;
+    border-radius: 22px;
+    padding: 22px;
+    min-height: 300px;
+}
+.aisn-mm-panel h3 {
+    margin-top: 0;
+}
+.aisn-mm-badge {
+    display: inline-block;
+    padding: 4px 9px;
+    background: #0f6cbf;
+    color: white;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    margin-bottom: 14px;
+}
+.aisn-mm-summary {
+    line-height: 1.7;
+    color: #334155;
+    font-size: 16px;
+}
+@media (max-width: 900px) {
+    .aisn-mm-grid {
+        grid-template-columns: 1fr;
+    }
+}
+');
+
 echo html_writer::start_div('container-fluid');
 
-echo html_writer::tag('h2', get_string('mindmapgenerator', 'local_aiskillnavigator'));
+echo html_writer::tag('h2', 'AI Mind Map Generator');
 
 echo html_writer::tag(
     'p',
-    'Generate a readable draggable AI mind map from a manual topic or from RAG-retrieved teacher material chunks. Click a node to read more information.',
+    'Generate a draggable and zoomable AI mind map from a topic or from selected course materials.',
     ['class' => 'lead']
 );
 
-echo html_writer::tag(
-    'p',
-    'Course: ' . s($course->fullname),
-    ['class' => 'text-muted']
-);
+echo html_writer::tag('p', 'Course: ' . s($course->fullname), ['class' => 'text-muted']);
 
-if ($warning !== '') {
-    echo html_writer::div(s($warning), 'alert alert-warning');
+if ($error !== '') {
+    echo html_writer::div(s($error), 'alert alert-danger');
 }
-
-if ($totalchunks > 0) {
-    echo html_writer::div(
-        'RAG index active: ' . $totalchunks . ' chunks indexed. Mind map generation can use semantic retrieval.',
-        'alert alert-success'
-    );
-} else if (empty($readablematerials)) {
-    echo html_writer::div(
-        'No readable teacher materials found yet. The mind map can still be generated from a manual topic.',
-        'alert alert-warning'
-    );
-} else {
-    echo html_writer::div(
-        'Readable teacher materials available: ' . count($readablematerials) . ', but no RAG chunks are indexed yet. Re-index materials from Teacher Materials.',
-        'alert alert-warning'
-    );
-}
-
-echo html_writer::start_div('card mb-4');
-echo html_writer::start_div('card-body');
-
-echo html_writer::tag('h3', 'Generate a new mind map');
 
 echo html_writer::start_tag('form', [
     'method' => 'get',
     'action' => new moodle_url('/local/aiskillnavigator/pages/mindmapgenerator.php'),
 ]);
 
-echo html_writer::empty_tag('input', [
-    'type' => 'hidden',
-    'name' => 'generate',
-    'value' => '1',
-]);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'courseid', 'value' => $courseid]);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'generate', 'value' => 1]);
 
-echo html_writer::empty_tag('input', [
-    'type' => 'hidden',
-    'name' => 'courseid',
-    'value' => $courseid,
-]);
+echo html_writer::start_div('card mb-4');
+echo html_writer::start_div('card-body');
 
-echo html_writer::start_div('form-group');
 echo local_aiskillnavigator_material_source_selector_html(
     $readablematerials,
-    $embeddingservice,
+    null,
     $courseid,
     $sourcemode,
     $selectedmaterialids,
     'Generation source',
-    'Choose Manual topic only for a generic map, all materials for full RAG search, or selected materials to build the mind map only from specific uploaded files.'
+    ''
 );
-echo html_writer::end_div();
 
-echo html_writer::start_div('form-group mt-3');
-
+echo html_writer::start_div('form-group mt-4');
 echo html_writer::tag('label', 'Topic or optional focus', ['for' => 'topic']);
-
 echo html_writer::empty_tag('input', [
     'type' => 'text',
     'name' => 'topic',
     'id' => 'topic',
     'class' => 'form-control',
     'value' => s($topic),
-    'placeholder' => 'Example: sensor data, Digital Twin synchronization, Arduino inputs, One Piece...',
+    'placeholder' => 'Example: HTML, funzioni lineari, Digital Twin...',
 ]);
+echo html_writer::tag('small', 'With Question/topic only this is the mind map topic. With course materials this is an optional focus.', ['class' => 'form-text text-muted']);
+echo html_writer::end_div();
 
-echo html_writer::tag(
-    'small',
-    'With Manual topic only this is the mind map topic. With teacher materials this is an optional focus inside the selected materials.',
-    ['class' => 'form-text text-muted']
+echo html_writer::start_div('form-group mt-3');
+echo html_writer::tag('label', 'Difficulty', ['for' => 'difficulty']);
+echo html_writer::select(
+    ['easy' => 'Easy', 'medium' => 'Medium', 'hard' => 'Hard'],
+    'difficulty',
+    $difficulty,
+    false,
+    ['class' => 'form-control', 'id' => 'difficulty']
 );
-
 echo html_writer::end_div();
 
 echo html_writer::empty_tag('input', [
@@ -444,439 +601,365 @@ echo html_writer::empty_tag('input', [
     'value' => 'Generate mind map',
 ]);
 
+echo html_writer::end_div();
+echo html_writer::end_div();
+
 echo html_writer::end_tag('form');
 
-echo html_writer::end_div();
-echo html_writer::end_div();
+if ($map !== null) {
+    [$nodes, $edges] = local_aiskillnavigator_mm_flatten($map);
 
-if ($parseerror !== '') {
-    echo html_writer::start_div('alert alert-warning mt-4');
-    echo html_writer::tag('h4', 'Mind map generation failed');
-    echo html_writer::tag('p', s($parseerror));
-    echo html_writer::tag('p', 'Raw AI response:');
-    echo html_writer::tag('pre', s($result), [
-        'style' => 'white-space: pre-wrap; max-height: 220px; overflow:auto;',
-    ]);
+    $nodesjson = json_encode($nodes, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+    $edgesjson = json_encode($edges, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+
+    echo html_writer::start_div('aisn-mm-wrap');
+
+    echo html_writer::start_div('aisn-mm-head');
+    echo html_writer::start_div('aisn-mm-titlebar');
+    echo html_writer::tag('h2', s($map['title']));
     echo html_writer::end_div();
-}
 
-if ($mindmap !== null && !empty($ragsources)) {
-    echo html_writer::start_div('alert alert-info mt-4');
-    echo html_writer::tag('h4', 'RAG sources used');
-    echo html_writer::start_tag('ul', ['class' => 'mb-1']);
-
-    foreach ($ragsources as $title => $similarity) {
-        echo html_writer::tag(
-            'li',
-            s($title) . ' ' . html_writer::tag('span', 'similarity: ' . $similarity, ['class' => 'badge badge-info'])
-        );
-    }
-
-    echo html_writer::end_tag('ul');
-
-    if ($ragdebug !== '') {
-        echo html_writer::tag('p', s($ragdebug), ['class' => 'mb-0 small']);
-    }
-
-    echo html_writer::end_div();
-}
-
-if ($mindmap !== null) {
-    $nodes = [];
-    $edges = [];
-
-    $centralid = 1;
-    $nextid = 2;
-
-    $central = local_aiskillnavigator_short_label((string) ($mindmap['central_topic'] ?? ($topic !== '' ? $topic : 'Materiali del docente')));
-    $centraldescription = local_aiskillnavigator_clean_info((string) ($mindmap['central_description'] ?? $mindmap['summary'] ?? ''));
-
-    $nodes[] = [
-        'id' => $centralid,
-        'label' => $central,
-        'group' => 'central',
-        'x' => 0,
-        'y' => 0,
-        'shape' => 'box',
-        'margin' => 18,
-        'infoTitle' => $central,
-        'infoType' => 'Argomento centrale',
-        'infoDescription' => $centraldescription,
-        'infoHint' => 'Parti da questo nodo per capire il concetto generale.',
-        'title' => $centraldescription,
-        'widthConstraint' => ['minimum' => 210, 'maximum' => 250],
-    ];
-
-    $branches = array_values($mindmap['branches']);
-
-    $positions = [
-        ['x' => 0, 'y' => -260],
-        ['x' => 340, 'y' => 0],
-        ['x' => 0, 'y' => 260],
-        ['x' => -340, 'y' => 0],
-    ];
-
-    foreach ($branches as $i => $branch) {
-        $position = $positions[$i] ?? ['x' => 0, 'y' => 0];
-
-        $branchid = $nextid++;
-        $branchtitle = local_aiskillnavigator_short_label((string) ($branch['title'] ?? 'Ramo'));
-        $branchdescription = local_aiskillnavigator_clean_info((string) ($branch['description'] ?? ''));
-
-        $nodes[] = [
-            'id' => $branchid,
-            'label' => $branchtitle,
-            'group' => 'branch',
-            'x' => $position['x'],
-            'y' => $position['y'],
-            'shape' => 'box',
-            'margin' => 14,
-            'infoTitle' => $branchtitle,
-            'infoType' => 'Ramo principale',
-            'infoDescription' => $branchdescription,
-            'infoHint' => 'Questo ramo organizza una parte importante dellÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢argomento.',
-            'title' => $branchdescription,
-            'widthConstraint' => ['minimum' => 180, 'maximum' => 230],
-        ];
-
-        $edges[] = ['from' => $centralid, 'to' => $branchid, 'width' => 4];
-
-        $children = $branch['children'] ?? [];
-        $children = is_array($children) ? array_slice(array_values($children), 0, 2) : [];
-
-        foreach ($children as $j => $child) {
-            $childid = $nextid++;
-
-            $childtitle = is_array($child)
-                ? local_aiskillnavigator_short_label((string) ($child['title'] ?? 'Dettaglio'))
-                : local_aiskillnavigator_short_label((string) $child);
-
-            $childdescription = is_array($child)
-                ? local_aiskillnavigator_clean_info((string) ($child['description'] ?? ''))
-                : 'Sotto-concetto collegato al ramo "' . $branchtitle . '".';
-
-            if ($i === 0) {
-                $childx = $position['x'] + (($j === 0) ? -160 : 160);
-                $childy = $position['y'] - 150;
-            } else if ($i === 1) {
-                $childx = $position['x'] + 220;
-                $childy = $position['y'] + (($j === 0) ? -85 : 85);
-            } else if ($i === 2) {
-                $childx = $position['x'] + (($j === 0) ? -160 : 160);
-                $childy = $position['y'] + 150;
-            } else {
-                $childx = $position['x'] - 220;
-                $childy = $position['y'] + (($j === 0) ? -85 : 85);
-            }
-
-            $nodes[] = [
-                'id' => $childid,
-                'label' => $childtitle,
-                'group' => 'child',
-                'x' => $childx,
-                'y' => $childy,
-                'shape' => 'box',
-                'margin' => 10,
-                'infoTitle' => $childtitle,
-                'infoType' => 'Sotto-nodo',
-                'infoDescription' => $childdescription,
-                'infoHint' => 'Questo nodo rappresenta un dettaglio utile per il ripasso.',
-                'title' => $childdescription,
-                'widthConstraint' => ['minimum' => 150, 'maximum' => 190],
-            ];
-
-            $edges[] = ['from' => $branchid, 'to' => $childid, 'width' => 2];
-        }
-    }
-
-    echo html_writer::start_div('mindmap-panel mt-4');
-
-    echo html_writer::tag('h3', s($mindmap['title'] ?? 'AI Mind Map'), ['class' => 'text-center mb-2']);
-
-    if (!empty($mindmap['summary'])) {
-        echo html_writer::tag('p', s($mindmap['summary']), ['class' => 'text-center text-muted mb-3']);
-    }
+    echo html_writer::tag('p', s($map['subtitle']), ['class' => 'text-muted']);
 
     if (!empty($selectedmaterials)) {
-        $sourcenames = [];
+        $names = array_map(function($m) {
+            return local_aiskillnavigator_material_source_clean_title($m);
+        }, $selectedmaterials);
 
-        foreach ($selectedmaterials as $material) {
-            $sourcenames[] = $material->title;
-        }
-
-        echo html_writer::tag(
-            'p',
-            'Generated from teacher materials: ' . s(implode(', ', $sourcenames)),
-            ['class' => 'text-center text-muted']
-        );
+        echo html_writer::tag('p', 'Generated from materials: ' . s(implode(', ', $names)), ['class' => 'text-muted']);
     } else {
-        echo html_writer::tag(
-            'p',
-            'Generated from manual topic, without teacher materials.',
-            ['class' => 'text-center text-muted']
-        );
+        echo html_writer::tag('p', 'Generated from manual topic, without teacher materials.', ['class' => 'text-muted']);
     }
 
-    echo html_writer::tag(
-        'p',
-        'Clicca un nodo per leggere la spiegazione. Puoi trascinare i nodi, zoomare e spostare la mappa.',
-        ['class' => 'text-center text-muted']
-    );
+    echo html_writer::tag('p', 'Drag the canvas, drag nodes, use mouse wheel to zoom, or use the controls below.', ['class' => 'text-muted']);
 
-    echo html_writer::start_div('mindmap-toolbar mb-3 text-center');
-
-    echo html_writer::tag('button', 'Reset view', [
-        'type' => 'button',
-        'id' => 'mindmapResetView',
-        'class' => 'btn btn-secondary btn-sm',
-    ]);
+    echo html_writer::start_div('aisn-mm-controls');
+    echo html_writer::tag('button', 'Zoom -', ['type' => 'button', 'id' => 'aisn-mm-zoom-out']);
+    echo html_writer::tag('button', 'Reset view', ['type' => 'button', 'id' => 'aisn-mm-reset']);
+    echo html_writer::tag('button', 'Zoom +', ['type' => 'button', 'id' => 'aisn-mm-zoom-in']);
+    echo html_writer::end_div();
 
     echo html_writer::end_div();
 
-    echo html_writer::start_div('mindmap-layout');
+    echo html_writer::start_div('aisn-mm-grid');
 
-    echo html_writer::div('', 'interactive-mindmap', ['id' => 'interactiveMindmap']);
+    echo html_writer::start_div('aisn-mm-canvas', ['id' => 'aisn-mm-canvas']);
 
-    echo html_writer::start_div('mindmap-info-panel', ['id' => 'mindmapInfoPanel']);
+    echo html_writer::tag('svg', '', ['id' => 'aisn-mm-svg']);
 
-    echo html_writer::tag('h4', 'Informazioni nodo', ['id' => 'mindmapInfoTitle']);
+    foreach ($nodes as $node) {
+        $class = 'aisn-mm-node ' . s($node['type']);
 
-    echo html_writer::tag('span', 'Seleziona un nodo', [
-        'id' => 'mindmapInfoType',
-        'class' => 'badge badge-primary mb-3',
-    ]);
+        echo html_writer::tag('button', s($node['title']), [
+            'type' => 'button',
+            'class' => $class,
+            'data-id' => s($node['id']),
+        ]);
+    }
 
-    echo html_writer::tag('p', 'Clicca su un nodo della mappa per visualizzare una spiegazione.', [
-        'id' => 'mindmapInfoDescription',
-    ]);
+    echo html_writer::end_div();
 
-    echo html_writer::tag('p', 'Suggerimento: inizia dal nodo centrale e poi esplora i rami principali.', [
-        'id' => 'mindmapInfoHint',
-        'class' => 'text-muted',
-    ]);
+    echo html_writer::start_div('aisn-mm-panel');
+    echo html_writer::tag('h3', s($nodes[0]['title']), ['id' => 'aisn-mm-panel-title']);
+    echo html_writer::span('Nodo centrale', 'aisn-mm-badge', ['id' => 'aisn-mm-panel-type']);
+    echo html_writer::tag('p', s($nodes[0]['summary']), ['class' => 'aisn-mm-summary', 'id' => 'aisn-mm-panel-summary']);
+    echo html_writer::end_div();
 
     echo html_writer::end_div();
 
     echo html_writer::end_div();
-    echo html_writer::end_div();
 
-    echo html_writer::tag('script', '
-window.localAiSkillNavigatorMindmapNodes = ' . json_encode($nodes, JSON_UNESCAPED_UNICODE) . ';
-window.localAiSkillNavigatorMindmapEdges = ' . json_encode($edges, JSON_UNESCAPED_UNICODE) . ';
-');
-}
+    $js = <<<'JS'
+(function() {
+    const nodes = __NODES__;
+    const edges = __EDGES__;
 
-echo html_writer::div(
-    html_writer::link(
-        new moodle_url('/local/aiskillnavigator/index.php', ['courseid' => $courseid]),
-        'Back to plugin home',
-        ['class' => 'btn btn-secondary mt-3']
-    ),
-    'mt-4'
-);
+    const canvas = document.getElementById("aisn-mm-canvas");
+    const svg = document.getElementById("aisn-mm-svg");
+    const resetBtn = document.getElementById("aisn-mm-reset");
+    const zoomInBtn = document.getElementById("aisn-mm-zoom-in");
+    const zoomOutBtn = document.getElementById("aisn-mm-zoom-out");
 
-echo html_writer::end_div();
-
-echo html_writer::tag('style', '
-.mindmap-panel {
-    background: linear-gradient(135deg, #f8fbff 0%, #eef4ff 100%);
-    border: 1px solid #d8e4f5;
-    border-radius: 22px;
-    padding: 24px;
-    box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
-}
-
-.mindmap-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 340px;
-    gap: 18px;
-    align-items: stretch;
-}
-
-.interactive-mindmap {
-    height: 620px;
-    width: 100%;
-    background: radial-gradient(circle at center, rgba(13, 110, 253, 0.08), transparent 30%), #ffffff;
-    border: 1px solid #dbe4f0;
-    border-radius: 22px;
-    overflow: hidden;
-}
-
-.mindmap-info-panel {
-    background: #ffffff;
-    border: 1px solid #dbe4f0;
-    border-radius: 22px;
-    padding: 22px;
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-}
-
-.mindmap-info-panel h4 {
-    font-weight: 700;
-}
-
-.mindmap-info-panel p {
-    font-size: 1rem;
-    line-height: 1.5;
-}
-
-@media (max-width: 1100px) {
-    .mindmap-layout {
-        grid-template-columns: 1fr;
+    if (!canvas || !svg) {
+        return;
     }
 
-    .interactive-mindmap {
-        height: 560px;
-    }
-}
-');
+    const byId = {};
+    nodes.forEach(function(node) {
+        byId[node.id] = node;
+        node.px = null;
+        node.py = null;
+    });
 
-echo html_writer::empty_tag('link', [
-    'rel' => 'stylesheet',
-    'href' => 'https://unpkg.com/vis-network/styles/vis-network.min.css',
-]);
+    const state = {
+        scale: 1,
+        panX: 0,
+        panY: 0,
+        baseW: 1280,
+        baseH: 840,
+        initialized: false
+    };
 
-echo html_writer::tag('script', '', [
-    'src' => 'https://unpkg.com/vis-network/standalone/umd/vis-network.min.js',
-]);
-
-$script = <<<'JS'
-(function () {
-    function escapeHtml(text) {
-        return String(text || "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;");
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
     }
 
-    function startMindmap() {
-        var container = document.getElementById("interactiveMindmap");
-
-        if (!container || typeof vis === "undefined") {
-            window.setTimeout(startMindmap, 300);
+    function initPositions(force) {
+        if (state.initialized && !force) {
             return;
         }
 
-        var nodes = new vis.DataSet(window.localAiSkillNavigatorMindmapNodes || []);
-        var edges = new vis.DataSet(window.localAiSkillNavigatorMindmapEdges || []);
+        state.baseW = Math.max(canvas.clientWidth * 1.65, 1280);
+        state.baseH = Math.max(canvas.clientHeight * 1.45, 840);
 
-        var network = new vis.Network(container, { nodes: nodes, edges: edges }, {
-            autoResize: true,
-            physics: false,
-            interaction: {
-                dragNodes: true,
-                dragView: true,
-                zoomView: true,
-                hover: true,
-                multiselect: false,
-                keyboard: false
-            },
-            layout: {
-                improvedLayout: false
-            },
-            nodes: {
-                borderWidth: 3,
-                shadow: {
-                    enabled: true,
-                    color: "rgba(0,0,0,0.16)",
-                    size: 10,
-                    x: 0,
-                    y: 4
-                },
-                font: {
-                    face: "Arial",
-                    size: 18,
-                    color: "#102033",
-                    bold: {
-                        color: "#102033"
-                    }
-                }
-            },
-            edges: {
-                smooth: {
-                    enabled: true,
-                    type: "cubicBezier",
-                    roundness: 0.35
-                },
-                color: {
-                    color: "#78a7f8",
-                    highlight: "#0d6efd",
-                    hover: "#0d6efd"
-                }
-            },
-            groups: {
-                central: {
-                    color: { background: "#0d6efd", border: "#ffffff" },
-                    font: { color: "#ffffff", size: 26 }
-                },
-                branch: {
-                    color: { background: "#ffffff", border: "#0d6efd" },
-                    font: { color: "#102033", size: 19 }
-                },
-                child: {
-                    color: { background: "#f8fafc", border: "#94a3b8" },
-                    font: { color: "#334155", size: 16 }
-                }
+        nodes.forEach(function(node) {
+            if (force || node.px === null || node.py === null) {
+                node.px = (node.x / 100) * state.baseW;
+                node.py = (node.y / 100) * state.baseH;
             }
         });
 
-        function updateInfoPanel(node) {
-            document.getElementById("mindmapInfoTitle").innerHTML = escapeHtml(node.infoTitle || node.label || "Nodo");
-            document.getElementById("mindmapInfoType").innerHTML = escapeHtml(node.infoType || "Nodo");
-            document.getElementById("mindmapInfoDescription").innerHTML = escapeHtml(node.infoDescription || "Nessuna descrizione disponibile.");
-            document.getElementById("mindmapInfoHint").innerHTML = escapeHtml(node.infoHint || "Usa questo nodo per orientarti nello studio.");
-        }
+        state.initialized = true;
+    }
 
-        network.on("click", function (params) {
-            if (!params.nodes || params.nodes.length === 0) {
+    function screenX(node) {
+        return state.panX + node.px * state.scale;
+    }
+
+    function screenY(node) {
+        return state.panY + node.py * state.scale;
+    }
+
+    function render() {
+        initPositions(false);
+
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+
+        svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+        svg.innerHTML = "";
+
+        edges.forEach(function(edge) {
+            const a = byId[edge.from];
+            const b = byId[edge.to];
+
+            if (!a || !b) {
                 return;
             }
 
-            var node = nodes.get(params.nodes[0]);
-            if (node) {
-                updateInfoPanel(node);
-            }
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", screenX(a));
+            line.setAttribute("y1", screenY(a));
+            line.setAttribute("x2", screenX(b));
+            line.setAttribute("y2", screenY(b));
+            line.setAttribute("stroke", "#1a73e8");
+            line.setAttribute("stroke-width", b.type === "child" ? "2" : "3");
+            line.setAttribute("stroke-opacity", b.type === "child" ? ".50" : ".85");
+            line.setAttribute("stroke-linecap", "round");
+            svg.appendChild(line);
         });
 
-        window.setTimeout(function () {
-            network.moveTo({
-                position: { x: 0, y: 0 },
-                scale: 0.82,
-                animation: {
-                    duration: 500,
-                    easingFunction: "easeInOutQuad"
-                }
-            });
-        }, 300);
+        nodes.forEach(function(node) {
+            const el = canvas.querySelector("[data-id=\"" + CSS.escape(node.id) + "\"]");
 
-        var reset = document.getElementById("mindmapResetView");
+            if (!el) {
+                return;
+            }
 
-        if (reset) {
-            reset.addEventListener("click", function () {
-                network.moveTo({
-                    position: { x: 0, y: 0 },
-                    scale: 0.82,
-                    animation: {
-                        duration: 500,
-                        easingFunction: "easeInOutQuad"
-                    }
-                });
-            });
-        }
-
-        var allNodes = nodes.get();
-
-        if (allNodes.length > 0) {
-            updateInfoPanel(allNodes[0]);
-        }
+            el.style.left = screenX(node) + "px";
+            el.style.top = screenY(node) + "px";
+        });
     }
 
-    startMindmap();
+    function resetView() {
+        initPositions(true);
+        state.scale = 0.72;
+        state.panX = (canvas.clientWidth - state.baseW * state.scale) / 2;
+        state.panY = (canvas.clientHeight - state.baseH * state.scale) / 2;
+        render();
+    }
+
+    function zoomAt(clientX, clientY, factor) {
+        const rect = canvas.getBoundingClientRect();
+        const cx = clientX - rect.left;
+        const cy = clientY - rect.top;
+
+        const beforeX = (cx - state.panX) / state.scale;
+        const beforeY = (cy - state.panY) / state.scale;
+
+        state.scale = clamp(state.scale * factor, 0.35, 2.2);
+
+        state.panX = cx - beforeX * state.scale;
+        state.panY = cy - beforeY * state.scale;
+
+        render();
+    }
+
+    function zoomCenter(factor) {
+        const rect = canvas.getBoundingClientRect();
+        zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
+    }
+
+    function selectNode(id) {
+        const node = byId[id];
+
+        if (!node) {
+            return;
+        }
+
+        document.querySelectorAll(".aisn-mm-node").forEach(function(el) {
+            el.classList.toggle("is-active", el.dataset.id === id);
+        });
+
+        document.getElementById("aisn-mm-panel-title").textContent = node.title;
+        document.getElementById("aisn-mm-panel-summary").textContent = node.summary;
+
+        let label = "Nodo";
+
+        if (node.type === "center") {
+            label = "Nodo centrale";
+        } else if (node.type === "branch") {
+            label = "Ramo principale";
+        } else if (node.type === "child") {
+            label = "Sotto-concetto";
+        }
+
+        document.getElementById("aisn-mm-panel-type").textContent = label;
+    }
+
+    let pan = null;
+    let draggedNode = null;
+
+    canvas.addEventListener("pointerdown", function(event) {
+        const targetNode = event.target.closest(".aisn-mm-node");
+
+        if (targetNode) {
+            const node = byId[targetNode.dataset.id];
+
+            if (!node) {
+                return;
+            }
+
+            draggedNode = {
+                node: node,
+                startX: event.clientX,
+                startY: event.clientY,
+                nodeX: node.px,
+                nodeY: node.py,
+                moved: false
+            };
+
+            targetNode.setPointerCapture(event.pointerId);
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+
+        pan = {
+            startX: event.clientX,
+            startY: event.clientY,
+            panX: state.panX,
+            panY: state.panY
+        };
+
+        canvas.classList.add("is-panning");
+        canvas.setPointerCapture(event.pointerId);
+        event.preventDefault();
+    });
+
+    canvas.addEventListener("pointermove", function(event) {
+        if (draggedNode) {
+            const dx = event.clientX - draggedNode.startX;
+            const dy = event.clientY - draggedNode.startY;
+
+            if (Math.abs(dx) + Math.abs(dy) > 3) {
+                draggedNode.moved = true;
+            }
+
+            draggedNode.node.px = draggedNode.nodeX + dx / state.scale;
+            draggedNode.node.py = draggedNode.nodeY + dy / state.scale;
+
+            render();
+            event.preventDefault();
+            return;
+        }
+
+        if (pan) {
+            state.panX = pan.panX + (event.clientX - pan.startX);
+            state.panY = pan.panY + (event.clientY - pan.startY);
+
+            render();
+            event.preventDefault();
+        }
+    });
+
+    canvas.addEventListener("pointerup", function(event) {
+        if (draggedNode) {
+            if (!draggedNode.moved) {
+                selectNode(draggedNode.node.id);
+            }
+
+            draggedNode = null;
+            event.preventDefault();
+            return;
+        }
+
+        pan = null;
+        canvas.classList.remove("is-panning");
+    });
+
+    canvas.addEventListener("pointercancel", function() {
+        pan = null;
+        draggedNode = null;
+        canvas.classList.remove("is-panning");
+    });
+
+    canvas.addEventListener("wheel", function(event) {
+        event.preventDefault();
+        zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? 1.12 : 0.88);
+    }, { passive: false });
+
+    document.querySelectorAll(".aisn-mm-node").forEach(function(button) {
+        button.addEventListener("click", function(event) {
+            event.preventDefault();
+            selectNode(button.dataset.id);
+        });
+    });
+
+    if (resetBtn) {
+        resetBtn.addEventListener("click", resetView);
+    }
+
+    if (zoomInBtn) {
+        zoomInBtn.addEventListener("click", function() {
+            zoomCenter(1.15);
+        });
+    }
+
+    if (zoomOutBtn) {
+        zoomOutBtn.addEventListener("click", function() {
+            zoomCenter(0.85);
+        });
+    }
+
+    window.addEventListener("resize", function() {
+        render();
+    });
+
+    resetView();
+    selectNode("center");
 })();
 JS;
 
-echo html_writer::tag('script', $script);
+    $js = str_replace(
+        ['__NODES__', '__EDGES__'],
+        [$nodesjson, $edgesjson],
+        $js
+    );
+
+    echo html_writer::tag('script', $js);
+}
+
+echo html_writer::end_div();
 
 echo $OUTPUT->footer();
-
-

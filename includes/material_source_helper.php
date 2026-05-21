@@ -4,6 +4,63 @@ defined('MOODLE_INTERNAL') || die();
 
 require_once(__DIR__ . '/material_ai_policy.php');
 
+if (!function_exists('local_aiskillnavigator_current_ai_is_local')) {
+    function local_aiskillnavigator_current_ai_is_local(): bool {
+        $provider = strtolower(trim((string)get_config('local_aiskillnavigator', 'provider')));
+        $endpoint = strtolower(trim((string)get_config('local_aiskillnavigator', 'endpoint')));
+
+        if ($provider === '' || $provider === 'prototype') {
+            return true;
+        }
+
+        if (in_array($provider, ['ollama', 'local', 'local_ollama'], true)) {
+            return true;
+        }
+
+        return str_contains($endpoint, 'localhost')
+            || str_contains($endpoint, '127.0.0.1')
+            || str_contains($endpoint, 'host.docker.internal')
+            || str_contains($endpoint, '::1');
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_external_allowed')) {
+    function local_aiskillnavigator_material_external_allowed(stdClass $material): bool {
+        if (isset($material->externalaiallowed)) {
+            return ((int)$material->externalaiallowed) === 1;
+        }
+
+        if (isset($material->aipolicy)) {
+            return ((string)$material->aipolicy) === 'external_allowed';
+        }
+
+        return false;
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_can_be_sent_to_current_ai')) {
+    function local_aiskillnavigator_material_can_be_sent_to_current_ai(stdClass $material): bool {
+        return local_aiskillnavigator_current_ai_is_local()
+            || local_aiskillnavigator_material_external_allowed($material);
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_ai_policy_label')) {
+    function local_aiskillnavigator_ai_policy_label(stdClass $material): string {
+        return local_aiskillnavigator_material_external_allowed($material)
+            ? 'Allowed for external AI'
+            : 'Local AI only';
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_ai_policy_badge_class')) {
+    function local_aiskillnavigator_ai_policy_badge_class(stdClass $material): string {
+        return local_aiskillnavigator_material_external_allowed($material)
+            ? 'badge badge-success'
+            : 'badge badge-secondary';
+    }
+}
+
 function local_aiskillnavigator_material_source_mode_from_request(int $defaultmaterialid = -1): string {
     $mode = optional_param('sourcemode', '', PARAM_ALPHA);
 
@@ -13,17 +70,20 @@ function local_aiskillnavigator_material_source_mode_from_request(int $defaultma
 
     if ($mode === '') {
         $legacy = optional_param('materialid', $defaultmaterialid, PARAM_INT);
-        $mode = $legacy > 0 ? 'selected' : 'manual';
+
+        if ($legacy === 0) {
+            $mode = 'all';
+        } else if ($legacy > 0) {
+            $mode = 'selected';
+        } else {
+            $mode = 'manual';
+        }
     }
 
-    if ($mode === 'all') {
-        $mode = 'selected';
-    }
-
-    return in_array($mode, ['manual', 'selected'], true) ? $mode : 'manual';
+    return in_array($mode, ['manual', 'all', 'selected'], true) ? $mode : 'manual';
 }
 
-function local_aiskillnavigator_material_source_get_readable_materials(int $courseid, bool $respectprivacy = true): array {
+function local_aiskillnavigator_material_source_get_readable_materials(int $courseid, bool $includeall = true): array {
     global $DB;
 
     if (!$DB->get_manager()->table_exists(new xmldb_table('local_aiskillnav_material'))) {
@@ -43,10 +103,6 @@ function local_aiskillnavigator_material_source_get_readable_materials(int $cour
             continue;
         }
 
-        if ($respectprivacy && !local_aiskillnavigator_material_can_be_sent_to_current_ai($record)) {
-            continue;
-        }
-
         $readable[(int)$record->id] = $record;
     }
 
@@ -55,7 +111,6 @@ function local_aiskillnavigator_material_source_get_readable_materials(int $cour
 
 function local_aiskillnavigator_material_source_selected_ids_from_request(array $readablematerials): array {
     $ids = optional_param_array('materialids', [], PARAM_INT);
-
     $legacy = optional_param('materialid', -1, PARAM_INT);
 
     if ($legacy > 0) {
@@ -74,25 +129,35 @@ function local_aiskillnavigator_material_source_selected_materials(array $readab
         return [];
     }
 
-    $materials = [];
+    $selected = [];
 
-    foreach ($selectedmaterialids as $id) {
-        $id = (int)$id;
+    if ($sourcemode === 'all') {
+        $selected = array_values($readablematerials);
+    } else {
+        foreach ($selectedmaterialids as $id) {
+            $id = (int)$id;
 
-        if (isset($readablematerials[$id])) {
-            $materials[] = $readablematerials[$id];
+            if (isset($readablematerials[$id])) {
+                $selected[] = $readablematerials[$id];
+            }
         }
     }
 
-    return local_aiskillnavigator_filter_materials_for_current_ai($materials);
+    return array_values(array_filter($selected, function($material) {
+        return local_aiskillnavigator_material_can_be_sent_to_current_ai($material);
+    }));
 }
 
 function local_aiskillnavigator_material_source_legacy_materialid(string $sourcemode, array $selectedmaterialids): int {
-    if ($sourcemode !== 'selected' || empty($selectedmaterialids)) {
-        return -1;
+    if ($sourcemode === 'all') {
+        return 0;
     }
 
-    return (int)reset($selectedmaterialids);
+    if ($sourcemode === 'selected' && !empty($selectedmaterialids)) {
+        return (int)reset($selectedmaterialids);
+    }
+
+    return -1;
 }
 
 function local_aiskillnavigator_material_source_clean_title(stdClass $material): string {
@@ -101,7 +166,15 @@ function local_aiskillnavigator_material_source_clean_title(stdClass $material):
     return trim($title) !== '' ? trim($title) : 'Course material';
 }
 
+function local_aiskillnavigator_material_source_short_title(stdClass $material): string {
+    return local_aiskillnavigator_material_source_clean_title($material) . ' (' . strlen((string)($material->content ?? '')) . ' chars)';
+}
+
 function local_aiskillnavigator_material_source_excerpt(string $text, int $limit = 170): string {
+    if (function_exists('local_aiskillnavigator_fix_mojibake')) {
+        $text = local_aiskillnavigator_fix_mojibake($text);
+    }
+
     $text = trim((string)preg_replace('/\s+/u', ' ', $text));
 
     if (core_text::strlen($text) > $limit) {
@@ -120,7 +193,27 @@ function local_aiskillnavigator_material_source_search($embeddingservice, string
 
     try {
         if (method_exists($embeddingservice, 'search')) {
-            $results = $embeddingservice->search($query, $courseid, $limit);
+            if ($sourcemode === 'all') {
+                $results = $embeddingservice->search($query, $courseid, $limit);
+            } else {
+                $merged = [];
+
+                foreach ($selectedmaterialids as $materialid) {
+                    $partial = $embeddingservice->search($query, $courseid, $limit, (int)$materialid);
+
+                    foreach ($partial as $result) {
+                        $key = (int)($result->id ?? 0);
+
+                        if ($key <= 0) {
+                            $key = crc32(($result->title ?? '') . ($result->chunkindex ?? '') . ($result->chunktext ?? ''));
+                        }
+
+                        $merged[$key] = $result;
+                    }
+                }
+
+                $results = array_values($merged);
+            }
         } else if (method_exists($embeddingservice, 'semantic_search')) {
             $results = $embeddingservice->semantic_search($courseid, $query, $limit);
         } else if (method_exists($embeddingservice, 'retrieve')) {
@@ -135,14 +228,18 @@ function local_aiskillnavigator_material_source_search($embeddingservice, string
         return [];
     }
 
-    $selected = array_map('intval', $selectedmaterialids);
+    if ($sourcemode === 'selected' && !empty($selectedmaterialids)) {
+        $selected = array_map('intval', $selectedmaterialids);
 
-    if (!empty($selected)) {
         $results = array_values(array_filter($results, function($result) use ($selected) {
             $materialid = isset($result->materialid) ? (int)$result->materialid : 0;
             return in_array($materialid, $selected, true);
         }));
     }
+
+    usort($results, function($a, $b) {
+        return ((float)($b->similarity ?? 0)) <=> ((float)($a->similarity ?? 0));
+    });
 
     return array_slice($results, 0, $limit);
 }
@@ -163,10 +260,6 @@ function local_aiskillnavigator_material_source_search_rag(
         $sourcemode,
         $materialids
     );
-}
-
-function local_aiskillnavigator_material_source_short_title(stdClass $material): string {
-    return local_aiskillnavigator_material_source_clean_title($material) . ' (' . strlen((string)($material->content ?? '')) . ' chars)';
 }
 
 function local_aiskillnavigator_material_source_hidden_fields(string $sourcemode, array $materialids): string {
@@ -202,9 +295,33 @@ function local_aiskillnavigator_material_source_selector_html(
     string $label = 'Source',
     string $help = ''
 ): string {
-    $sourcemode = in_array($sourcemode, ['manual', 'selected'], true) ? $sourcemode : 'manual';
+    $sourcemode = in_array($sourcemode, ['manual', 'all', 'selected'], true) ? $sourcemode : 'manual';
+
+    if ($sourcemode === 'all') {
+        $sourcemode = 'selected';
+    }
 
     $html = '';
+
+    $html .= html_writer::tag('style', '
+.aisn-material.is-disabled {
+    opacity: .62;
+    cursor: not-allowed;
+    background: #f8fafc;
+}
+.aisn-material.is-disabled:hover {
+    transform: none;
+    border-color: #e5e7eb;
+    box-shadow: none;
+}
+.aisn-material-note {
+    display: block;
+    margin-top: 8px;
+    color: #92400e;
+    font-size: 12px;
+    font-weight: 700;
+}
+');
 
     $html .= html_writer::start_div('aisn-source-box');
 
@@ -231,12 +348,10 @@ function local_aiskillnavigator_material_source_selector_html(
         'checked' => $sourcemode === 'selected' ? 'checked' : null,
     ]);
     $html .= html_writer::span('Use course materials', 'aisn-choice-title');
-    $html .= html_writer::span('Only materials allowed for the current AI provider are shown.', 'aisn-choice-text');
+    $html .= html_writer::span('Choose one or more allowed materials below.', 'aisn-choice-text');
     $html .= html_writer::end_tag('label');
 
     $html .= html_writer::end_div();
-
-    $html .= html_writer::div(local_aiskillnavigator_provider_privacy_notice(), 'alert alert-info');
 
     $panelclass = $sourcemode === 'manual' ? 'aisn-material-panel aisn-hidden' : 'aisn-material-panel';
 
@@ -244,7 +359,7 @@ function local_aiskillnavigator_material_source_selector_html(
 
     if (empty($readablematerials)) {
         $html .= html_writer::div(
-            'No readable materials are available for the current AI provider. If you use an external provider, allow selected materials from Course materials / RAG.',
+            'No course materials found yet. Add a Moodle File, Page, Label, Folder, URL or Book resource to this course.',
             'aisn-empty'
         );
     } else {
@@ -253,22 +368,35 @@ function local_aiskillnavigator_material_source_selector_html(
 
         foreach ($readablematerials as $material) {
             $id = (int)$material->id;
-            $checked = in_array($id, $selectedmaterialids, true) && $sourcemode === 'selected';
+            $allowed = local_aiskillnavigator_material_can_be_sent_to_current_ai($material);
+            $checked = $allowed && in_array($id, $selectedmaterialids, true) && $sourcemode === 'selected';
 
-            $html .= html_writer::start_tag('label', ['class' => 'aisn-material']);
+            $class = $allowed ? 'aisn-material' : 'aisn-material is-disabled';
 
-            $html .= html_writer::empty_tag('input', [
+            $html .= html_writer::start_tag('label', ['class' => $class]);
+
+            $inputattrs = [
                 'type' => 'checkbox',
                 'name' => 'materialids[]',
                 'value' => $id,
                 'checked' => $checked ? 'checked' : null,
-            ]);
+            ];
+
+            if (!$allowed) {
+                $inputattrs['disabled'] = 'disabled';
+            }
+
+            $html .= html_writer::empty_tag('input', $inputattrs);
 
             $html .= html_writer::span(s(local_aiskillnavigator_material_source_clean_title($material)), 'aisn-material-title');
             $html .= html_writer::empty_tag('br');
             $html .= html_writer::span(strlen((string)$material->content) . ' chars', 'aisn-badge');
             $html .= ' ';
             $html .= html_writer::span(s(local_aiskillnavigator_ai_policy_label($material)), local_aiskillnavigator_ai_policy_badge_class($material));
+
+            if (!$allowed) {
+                $html .= html_writer::span('Not selectable with the current external provider.', 'aisn-material-note');
+            }
 
             $html .= html_writer::div(
                 s(local_aiskillnavigator_material_source_excerpt((string)$material->content)),
@@ -285,11 +413,12 @@ function local_aiskillnavigator_material_source_selector_html(
 
     $html .= html_writer::tag('script', '
 (function() {
-    const radios = document.querySelectorAll("input[name=\"sourcemode\"]");
-    const panels = document.querySelectorAll("[data-aisn-material-panel=\"1\"]");
+    const radios = document.querySelectorAll("input[name=\"sourcemode\"], input[name=\"source_mode\"]");
+    const panels = document.querySelectorAll("[data-aisn-material-panel=\"1\"], #materials-panel");
 
     function refresh() {
-        const selected = document.querySelector("input[name=\"sourcemode\"]:checked");
+        const selected = document.querySelector("input[name=\"sourcemode\"]:checked") ||
+                         document.querySelector("input[name=\"source_mode\"]:checked");
 
         panels.forEach(function(panel) {
             const boxes = panel.querySelectorAll("input[type=\"checkbox\"]");
@@ -298,16 +427,26 @@ function local_aiskillnavigator_material_source_selector_html(
                 panel.classList.add("aisn-hidden");
                 boxes.forEach(function(box) {
                     box.checked = false;
-                    box.disabled = true;
+                    if (!box.dataset.forceDisabled) {
+                        box.disabled = true;
+                    }
                 });
             } else {
                 panel.classList.remove("aisn-hidden");
                 boxes.forEach(function(box) {
-                    box.disabled = false;
+                    if (!box.dataset.forceDisabled) {
+                        box.disabled = false;
+                    }
                 });
             }
         });
     }
+
+    document.querySelectorAll(".aisn-material.is-disabled input[type=\"checkbox\"]").forEach(function(box) {
+        box.dataset.forceDisabled = "1";
+        box.disabled = true;
+        box.checked = false;
+    });
 
     radios.forEach(function(radio) {
         radio.addEventListener("change", refresh);
@@ -320,4 +459,56 @@ function local_aiskillnavigator_material_source_selector_html(
     $html .= html_writer::end_div();
 
     return $html;
+}
+
+function local_aiskillnavigator_material_source_render_controls(
+    array $readablematerials,
+    $embeddingservice,
+    int $courseid,
+    string $sourcemode,
+    array $materialids,
+    string $label,
+    string $manualtext,
+    string $alltext,
+    string $selectedtext,
+    string $helptext
+): string {
+    return local_aiskillnavigator_material_source_selector_html(
+        $readablematerials,
+        $embeddingservice,
+        $courseid,
+        $sourcemode,
+        $materialids,
+        $label,
+        $helptext
+    );
+}
+
+function local_aiskillnavigator_material_source_footer_script(): string {
+    return '';
+}
+
+function local_aiskillnavigator_material_source_count_chunks(
+    $embeddingservice,
+    int $courseid,
+    string $sourcemode,
+    array $materialids
+): int {
+    if ($sourcemode === 'manual') {
+        return 0;
+    }
+
+    if ($sourcemode === 'all' && method_exists($embeddingservice, 'count_indexed_chunks')) {
+        return $embeddingservice->count_indexed_chunks($courseid);
+    }
+
+    $total = 0;
+
+    foreach ($materialids as $materialid) {
+        if (method_exists($embeddingservice, 'count_indexed_chunks')) {
+            $total += (int)$embeddingservice->count_indexed_chunks($courseid, (int)$materialid);
+        }
+    }
+
+    return $total;
 }
