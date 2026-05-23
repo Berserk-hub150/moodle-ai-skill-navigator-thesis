@@ -1,0 +1,5 @@
+
+# Local backup files
+*.bak*
+backup_*
+
