@@ -297,8 +297,8 @@ if (empty($materials)) {
         $materialid = (int)$material->id;
         $preview = trim(preg_replace('/\s+/', ' ', (string)$material->content));
 
-        if (core_text::strlen($preview) > 600) {
-            $preview = core_text::substr($preview, 0, 600) . '...';
+        if (\core_text::strlen($preview) > 600) {
+            $preview = \core_text::substr($preview, 0, 600) . '...';
         }
 
         echo html_writer::start_div('card mb-3');
@@ -308,8 +308,8 @@ if (empty($materials)) {
         echo html_writer::tag(
             'p',
             'Type: ' . s($material->materialtype) .
-            ' · RAG chunks: ' . (int)($chunkscounts[$materialid] ?? 0) .
-            ' · AI policy: ' . s(local_aiskillnavigator_ai_policy_label($material)),
+            ' Â· RAG chunks: ' . (int)($chunkscounts[$materialid] ?? 0) .
+            ' Â· AI policy: ' . s(local_aiskillnavigator_ai_policy_label($material)),
             ['class' => 'text-muted']
         );
 

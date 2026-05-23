@@ -177,8 +177,8 @@ function local_aiskillnavigator_material_source_excerpt(string $text, int $limit
 
     $text = trim((string)preg_replace('/\s+/u', ' ', $text));
 
-    if (core_text::strlen($text) > $limit) {
-        return core_text::substr($text, 0, $limit) . '...';
+    if (\core_text::strlen($text) > $limit) {
+        return \core_text::substr($text, 0, $limit) . '...';
     }
 
     return $text;

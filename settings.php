@@ -2,8 +2,6 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-global $ADMIN, $PAGE;
-
 if (empty($hassiteconfig)) {
     return;
 }
@@ -18,83 +16,177 @@ $ADMIN->add('localplugins', $settings);
 $settings->add(new admin_setting_heading(
     'local_aiskillnavigator/mainheading',
     'AI provider configuration',
-    'Configure the AI provider used by the plugin.'
+    'Configure the AI provider used by the plugin. Prototype mode works without external API keys and is recommended for first installation tests.'
 ));
 
 $settings->add(new admin_setting_configselect(
     'local_aiskillnavigator/provider',
     'Provider',
-    '',
-    'openrouter',
+    'Choose where AI requests are sent.',
+    'prototype',
     [
-        'openrouter' => 'Multi-LLM API gateway',
-        'ollama' => 'Local LLM',
-        'openai_compatible' => 'OpenAI-compatible API',
-        'deepseek' => 'Direct provider API',
+        'prototype' => 'Prototype/demo provider - no external calls',
+        'gemini' => 'Google Gemini API',
+        'openrouter' => 'OpenRouter multi-LLM gateway',
+        'ollama' => 'Local Ollama',
+        'openai' => 'OpenAI API',
+        'openai_compatible' => 'Generic OpenAI-compatible API',
+        'deepseek' => 'DeepSeek API',
+        'groq' => 'Groq API',
+        'mistral' => 'Mistral API',
         'custom_http' => 'Custom HTTP JSON',
     ]
 ));
 
 $settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/endpoint',
+    'Endpoint',
+    'Leave empty to use the default endpoint for Gemini/OpenRouter/OpenAI/Groq/DeepSeek/Ollama. Required for custom HTTP or generic OpenAI-compatible providers.',
+    '',
+    PARAM_RAW_TRIMMED
+));
+
+$settings->add(new admin_setting_configtext(
     'local_aiskillnavigator/model',
     'Model',
+    'Examples: gemini-1.5-flash, deepseek/deepseek-chat, gpt-4o-mini, qwen2.5:3b.',
     '',
-    'deepseek/deepseek-chat',
     PARAM_RAW_TRIMMED
 ));
 
 $settings->add(new admin_setting_configpasswordunmask(
     'local_aiskillnavigator/apikey',
     'API key',
-    '',
+    'Store the key only in Moodle settings. Leave empty for local/prototype providers.',
     ''
 ));
 
-if (!(defined('CLI_SCRIPT') && CLI_SCRIPT)) {
-    $PAGE->requires->js_init_code("
-(function() {
-    function clean() {
-        var style = document.createElement('style');
-        style.innerHTML = `
-            .form-defaultinfo,
-            .form-shortname,
-            .form-description,
-            .adminsettings .form-item .form-label .text-muted,
-            .adminsettings .form-item .form-setting .text-muted {
-                display: none !important;
-            }
+$settings->add(new admin_setting_heading(
+    'local_aiskillnavigator/customheading',
+    'Custom HTTP provider',
+    'Use this only if your provider is not directly supported.'
+));
 
-            .adminsettings .form-item {
-                margin-bottom: 8px !important;
-                padding-bottom: 0 !important;
-            }
+$settings->add(new admin_setting_configtextarea(
+    'local_aiskillnavigator/customrequesttemplate',
+    'Custom request JSON template',
+    'Available placeholders: {{model}}, {{system}}, {{prompt}}, {{max_tokens}}, {{apikey}}.',
+    '',
+    PARAM_RAW
+));
 
-            .adminsettings .form-label {
-                width: 150px !important;
-                min-width: 150px !important;
-                font-weight: 600 !important;
-                font-size: 15px !important;
-            }
+$settings->add(new admin_setting_configtextarea(
+    'local_aiskillnavigator/customheadersjson',
+    'Custom headers JSON',
+    'Example: {"Authorization":"Bearer {{apikey}}","Content-Type":"application/json"}',
+    '',
+    PARAM_RAW
+));
 
-            .adminsettings input[type='text'],
-            .adminsettings input[type='password'],
-            .adminsettings select {
-                max-width: 390px !important;
-                width: 390px !important;
-            }
+$settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/customresponsepath',
+    'Custom response path',
+    'Example: choices.0.message.content, candidates.0.content.parts.0.text, or _raw.',
+    'choices.0.message.content',
+    PARAM_RAW_TRIMMED
+));
 
-            .adminsettings .settingsform {
-                max-width: 700px !important;
-            }
-        `;
-        document.head.appendChild(style);
+$settings->add(new admin_setting_heading(
+    'local_aiskillnavigator/embeddingheading',
+    'RAG embeddings',
+    'Configure embeddings used by the Course materials / RAG feature. Leave fields empty to use safe defaults.'
+));
 
-        document.querySelectorAll('.form-defaultinfo').forEach(function(e) { e.remove(); });
-        document.querySelectorAll('.form-shortname').forEach(function(e) { e.remove(); });
-    }
+$settings->add(new admin_setting_configselect(
+    'local_aiskillnavigator/embeddingprovider',
+    'Embedding provider',
+    '',
+    'same_as_chat',
+    [
+        'same_as_chat' => 'Same family as chat provider',
+        'ollama' => 'Local Ollama embeddings',
+        'openai' => 'OpenAI-compatible embeddings',
+        'custom_http' => 'Custom HTTP embeddings',
+    ]
+));
 
-    window.addEventListener('load', clean);
-    setTimeout(clean, 300);
-})();
-");
-}
+$settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/embeddingendpoint',
+    'Embedding endpoint',
+    'Optional. For Ollama use http://host.docker.internal:11434. For OpenAI-compatible APIs use the base endpoint.',
+    '',
+    PARAM_RAW_TRIMMED
+));
+
+$settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/embeddingmodel',
+    'Embedding model',
+    'Examples: nomic-embed-text, text-embedding-3-small.',
+    '',
+    PARAM_RAW_TRIMMED
+));
+
+$settings->add(new admin_setting_configpasswordunmask(
+    'local_aiskillnavigator/embeddingapikey',
+    'Embedding API key',
+    'Optional. If empty, the main API key is reused.',
+    ''
+));
+
+$settings->add(new admin_setting_configtextarea(
+    'local_aiskillnavigator/embeddingrequesttemplate',
+    'Custom embedding request template',
+    'Available placeholders: {{model}}, {{input}}, {{apikey}}.',
+    '',
+    PARAM_RAW
+));
+
+$settings->add(new admin_setting_configtextarea(
+    'local_aiskillnavigator/embeddingheadersjson',
+    'Custom embedding headers JSON',
+    '',
+    '',
+    PARAM_RAW
+));
+
+$settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/embeddingresponsepath',
+    'Custom embedding response path',
+    'Default: data.0.embedding',
+    'data.0.embedding',
+    PARAM_RAW_TRIMMED
+));
+
+$settings->add(new admin_setting_heading(
+    'local_aiskillnavigator/searchheading',
+    'Live web search',
+    'Optional Search API used by Simulator Finder to verify online simulators/tools. Leave disabled if you do not have a Search API key.'
+));
+
+$settings->add(new admin_setting_configselect(
+    'local_aiskillnavigator/searchprovider',
+    'Search provider',
+    'Use Tavily for AI-oriented web search, Brave for independent search, or SerpAPI for Google-style results.',
+    'none',
+    [
+        'none' => 'Disabled',
+        'tavily' => 'Tavily Search API',
+        'brave' => 'Brave Search API',
+        'serpapi' => 'SerpAPI Google Search',
+    ]
+));
+
+$settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/searchendpoint',
+    'Search endpoint',
+    'Optional. Leave empty for default endpoint of the selected provider.',
+    '',
+    PARAM_RAW_TRIMMED
+));
+
+$settings->add(new admin_setting_configpasswordunmask(
+    'local_aiskillnavigator/searchapikey',
+    'Search API key',
+    'Do not put this key in code or GitHub. Store it only in Moodle settings.',
+    ''
+));

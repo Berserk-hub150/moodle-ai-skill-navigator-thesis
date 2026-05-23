@@ -410,9 +410,29 @@ if (function_exists('local_aiskillnavigator_render_course_builder_panel') && iss
 }
 
 if (function_exists('local_aiskillnavigator_render_external_baseline_panel')) {
-    local_aiskillnavigator_render_external_baseline_panel();
 }
 // END CALLISTO_REAL_FEATURES
+echo local_aisn_hide_teacher_coursebuilder_duplicate();
 echo $OUTPUT->footer();
 
 
+
+if (!function_exists('local_aisn_hide_teacher_coursebuilder_duplicate')) {
+    function local_aisn_hide_teacher_coursebuilder_duplicate(): string {
+        return <<<'HTML'
+<script id="aisn-hide-teacher-coursebuilder-v1">
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('h2,h3,h4').forEach(function (h) {
+        var txt = (h.textContent || '').trim().toLowerCase();
+        if (txt.indexOf('ai course builder from website/material') !== -1) {
+            var card = h.closest('.card');
+            if (card) {
+                card.remove();
+            }
+        }
+    });
+});
+</script>
+HTML;
+    }
+}

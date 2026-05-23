@@ -1,0 +1,280 @@
+<?php
+
+require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ui_style_helper.php');
+require_once(__DIR__ . '/../classes/service/web_search_service.php');
+
+global $PAGE, $OUTPUT;
+
+$courseid = optional_param('courseid', optional_param('id', SITEID, PARAM_INT), PARAM_INT);
+$action = optional_param('action', '', PARAM_ALPHA);
+$topic = optional_param('topic', '', PARAM_TEXT);
+$level = optional_param('level', 'medium', PARAM_ALPHA);
+$notes = optional_param('notes', '', PARAM_RAW_TRIMMED);
+
+$course = get_course($courseid);
+
+require_login($course);
+
+$context = context_course::instance($courseid);
+require_capability('local/aiskillnavigator:viewteacher', $context);
+
+$PAGE->set_context($context);
+$PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/simulator_finder.php', ['courseid' => $courseid]));
+$PAGE->set_title('AI Simulator Finder');
+$PAGE->set_heading('AI Simulator Finder');
+
+function local_aiskillnavigator_sim_clean(string $text): string {
+    $text = trim($text);
+    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = preg_replace('/[ \t]+/', ' ', $text);
+    $text = preg_replace("/\r\n|\r/", "\n", $text);
+    return trim($text);
+}
+
+function local_aiskillnavigator_sim_call_ai(string $prompt, string $systemprompt): string {
+    try {
+        if (class_exists('\local_aiskillnavigator\service\ai_provider_factory')) {
+            $provider = \local_aiskillnavigator\service\ai_provider_factory::create_from_config();
+            return $provider->generate($prompt, 1800, $systemprompt);
+        }
+
+        if (
+            class_exists('\local_aiskillnavigator\service\provider\ai_provider_config') &&
+            class_exists('\local_aiskillnavigator\service\provider\ai_provider_selector')
+        ) {
+            $config = new \local_aiskillnavigator\service\provider\ai_provider_config();
+            $selector = new \local_aiskillnavigator\service\provider\ai_provider_selector();
+            $provider = $selector->create($config);
+            return $provider->generate($prompt, 1800, $systemprompt);
+        }
+    } catch (Throwable $e) {
+        return 'AI error: ' . $e->getMessage();
+    }
+
+    return 'AI provider not available. Configure it from plugin settings.';
+}
+
+function local_aiskillnavigator_sim_search_context(array $results): string {
+    if (empty($results)) {
+        return "No live web results available.\n";
+    }
+
+    $lines = [];
+
+    foreach ($results as $i => $result) {
+        $lines[] = 'Result ' . ($i + 1) . ':';
+        $lines[] = 'Title: ' . $result['title'];
+        $lines[] = 'URL: ' . $result['url'];
+        $lines[] = 'Snippet: ' . $result['snippet'];
+        $lines[] = '';
+    }
+
+    return implode("\n", $lines);
+}
+
+$result = '';
+$error = '';
+$searchresults = [];
+$searchnote = '';
+
+if ($action === 'generate') {
+    require_sesskey();
+
+    $topic = local_aiskillnavigator_sim_clean($topic);
+    $notes = local_aiskillnavigator_sim_clean($notes);
+
+    if ($topic === '') {
+        $error = 'Insert a topic first.';
+    } else {
+        if (core_text::strlen($notes) > 5000) {
+            $notes = core_text::substr($notes, 0, 5000) . "\n[notes truncated]";
+        }
+
+        $known = [
+            'electronics/circuits' => 'Falstad Circuit Simulator, EveryCircuit, Tinkercad Circuits',
+            'Arduino/IoT/embedded' => 'Wokwi, Tinkercad Circuits',
+            'physics' => 'PhET Interactive Simulations, Algodoo',
+            'math/geometry/functions' => 'GeoGebra, Desmos',
+            'networking' => 'Cisco Packet Tracer, GNS3, ns-3',
+            'programming/web' => 'CodePen, JSFiddle, Replit, StackBlitz',
+            'machine learning/data science' => 'Google Colab, Kaggle Notebooks',
+            'robotics' => 'Webots, CoppeliaSim',
+            'systems/dynamics/agents' => 'NetLogo',
+            'chemistry' => 'PhET Interactive Simulations',
+        ];
+
+        $searchservice = new \local_aiskillnavigator\service\web_search_service();
+
+        if ($searchservice->is_enabled()) {
+            $query = $topic . ' online simulator educational exercise official tool';
+            $searchresults = $searchservice->search($query, 5);
+
+            if (!empty($searchresults)) {
+                $searchnote = 'Live web search enabled via ' . $searchservice->provider_name() . '.';
+            } else {
+                $searchnote = 'Live web search enabled, but no useful results were returned.';
+            }
+        } else {
+            $searchnote = 'Live web search disabled. The AI uses only the curated simulator catalogue.';
+        }
+
+        $prompt = "A teacher wants a practical exercise and an online simulator/tool for a Moodle course.\n";
+        $prompt .= "Topic: " . $topic . "\n";
+        $prompt .= "Level: " . $level . "\n";
+
+        if ($notes !== '') {
+            $prompt .= "Teacher notes/material:\n" . $notes . "\n";
+        }
+
+        $prompt .= "\nCurated simulator/tool catalogue:\n";
+
+        foreach ($known as $area => $tools) {
+            $prompt .= "- " . $area . ": " . $tools . "\n";
+        }
+
+        $prompt .= "\nLive web search results:\n";
+        $prompt .= local_aiskillnavigator_sim_search_context($searchresults);
+
+        $prompt .= "\nRules:\n";
+        $prompt .= "- Respond in Italian.\n";
+        $prompt .= "- Create one concrete exercise the teacher can assign.\n";
+        $prompt .= "- Recommend the best simulator/tool only if it is a strong fit.\n";
+        $prompt .= "- If live search results contain a relevant official tool, prefer that result and mention the URL.\n";
+        $prompt .= "- If no reliable simulator/tool is known or found, write clearly: No suitable online simulator found.\n";
+        $prompt .= "- Do not invent fake websites, fake tools or fake URLs.\n";
+        $prompt .= "- If a URL is uncertain, say that the teacher should verify the official site.\n";
+        $prompt .= "- Keep the output short and directly usable.\n\n";
+        $prompt .= "Return sections:\n";
+        $prompt .= "1. Exercise title\n";
+        $prompt .= "2. Exercise instructions\n";
+        $prompt .= "3. Recommended simulator/tool\n";
+        $prompt .= "4. Link/source, only if available from live search results\n";
+        $prompt .= "5. Why this simulator fits\n";
+        $prompt .= "6. Alternative if no simulator is available\n";
+        $prompt .= "7. Evaluation criteria\n";
+
+        $result = local_aiskillnavigator_sim_call_ai(
+            $prompt,
+            'You help teachers find practical online simulators/tools. Avoid fake links. Use live search results when available. Say no if no suitable simulator is known.'
+        );
+    }
+}
+
+echo $OUTPUT->header();
+local_aiskillnavigator_print_inline_styles();
+
+echo html_writer::start_div('container-fluid');
+
+echo html_writer::tag('h2', 'AI Simulator Finder');
+echo html_writer::tag(
+    'p',
+    'Insert a topic and let the AI propose a practical exercise plus a suitable online simulator/tool. If a Search API is configured, the plugin also checks live web results.',
+    ['class' => 'lead']
+);
+echo html_writer::tag('p', 'Course: ' . s($course->fullname), ['class' => 'text-muted']);
+
+echo html_writer::div(
+    'Live web search is optional. Without a Search API key, this page still works using a curated simulator catalogue.',
+    'alert alert-info'
+);
+
+if ($error !== '') {
+    echo html_writer::div(s($error), 'alert alert-danger');
+}
+
+echo html_writer::start_div('card mb-4');
+echo html_writer::start_div('card-body');
+
+echo html_writer::start_tag('form', [
+    'method' => 'post',
+    'action' => new moodle_url('/local/aiskillnavigator/pages/simulator_finder.php', ['courseid' => $courseid]),
+]);
+
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => 'generate']);
+
+echo html_writer::tag('label', 'Topic', ['for' => 'topic']);
+echo html_writer::empty_tag('input', [
+    'type' => 'text',
+    'name' => 'topic',
+    'id' => 'topic',
+    'class' => 'form-control mb-3',
+    'value' => s($topic),
+    'placeholder' => 'Example: circuits, Arduino IoT, functions, networking, HTML, machine learning...',
+    'required' => 'required',
+]);
+
+echo html_writer::tag('label', 'Level', ['for' => 'level']);
+echo html_writer::select(
+    ['easy' => 'Easy', 'medium' => 'Medium', 'hard' => 'Hard'],
+    'level',
+    $level,
+    false,
+    ['class' => 'form-control mb-3', 'id' => 'level']
+);
+
+echo html_writer::tag('label', 'Optional teacher notes/material', ['for' => 'notes']);
+echo html_writer::tag('textarea', s($notes), [
+    'name' => 'notes',
+    'id' => 'notes',
+    'class' => 'form-control mb-3',
+    'rows' => 6,
+    'placeholder' => 'Optional: paste lesson context, constraints, available devices, assessment objective...',
+]);
+
+echo html_writer::empty_tag('input', [
+    'type' => 'submit',
+    'class' => 'btn btn-primary',
+    'value' => 'Generate exercise and simulator',
+]);
+
+echo ' ';
+
+echo html_writer::link(
+    new moodle_url('/local/aiskillnavigator/pages/index.php', ['courseid' => $courseid]),
+    'Back to plugin home',
+    ['class' => 'btn btn-secondary']
+);
+
+echo html_writer::end_tag('form');
+
+echo html_writer::end_div();
+echo html_writer::end_div();
+
+if ($searchnote !== '') {
+    echo html_writer::div(s($searchnote), 'alert alert-secondary');
+}
+
+if (!empty($searchresults)) {
+    echo html_writer::start_div('card mb-4');
+    echo html_writer::start_div('card-body');
+    echo html_writer::tag('h3', 'Live search results used');
+
+    echo html_writer::start_tag('ol');
+
+    foreach ($searchresults as $row) {
+        $link = html_writer::link($row['url'], s($row['title']), ['target' => '_blank', 'rel' => 'noopener noreferrer']);
+        echo html_writer::tag('li', $link . html_writer::tag('p', s($row['snippet']), ['class' => 'text-muted']));
+    }
+
+    echo html_writer::end_tag('ol');
+
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+}
+
+if ($result !== '') {
+    echo html_writer::start_div('card mb-4');
+    echo html_writer::start_div('card-body');
+    echo html_writer::tag('h3', 'Exercise and simulator suggestion');
+    echo html_writer::tag('pre', s($result), [
+        'style' => 'white-space: pre-wrap; background:#0f172a; color:#e5e7eb; padding:22px; border-radius:18px; line-height:1.55;',
+    ]);
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+}
+
+echo html_writer::end_div();
+
+echo $OUTPUT->footer();

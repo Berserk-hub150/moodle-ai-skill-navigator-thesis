@@ -195,6 +195,29 @@ if ($canteacher) {
     echo html_writer::end_div();
 }
 
+if ($canteacher) {
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'AI Course Builder',
+        'Transform website text or external material into a Moodle course plan with pre-test, final test and activities.',
+        'Open AI Course Builder',
+        '/local/aiskillnavigator/pages/course_builder.php',
+        $courseid,
+        'btn btn-info'
+    );
+    echo html_writer::end_div();
+
+    echo html_writer::start_div('col-md-6 col-lg-4');
+    echo local_aiskillnavigator_index_card(
+        'AI Simulator Finder',
+        'Generate a practical exercise and suggest a suitable online simulator or tool for a topic.',
+        'Open Simulator Finder',
+        '/local/aiskillnavigator/pages/simulator_finder.php',
+        $courseid,
+        'btn btn-info'
+    );
+    echo html_writer::end_div();
+}
 if ($canmaterials) {
     echo html_writer::start_div('col-md-6 col-lg-4');
     echo local_aiskillnavigator_index_card(

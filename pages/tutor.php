@@ -28,8 +28,8 @@ $PAGE->set_heading('AI Tutor');
 function local_aiskillnavigator_tutor_limit_context(string $text, int $limit = 9000): string {
     $text = local_aiskillnavigator_fix_mojibake(trim($text));
 
-    if (core_text::strlen($text) > $limit) {
-        return core_text::substr($text, 0, $limit) . "\n[Content truncated]";
+    if (\core_text::strlen($text) > $limit) {
+        return \core_text::substr($text, 0, $limit) . "\n[Content truncated]";
     }
 
     return $text;

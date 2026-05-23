@@ -4,6 +4,8 @@ namespace local_aiskillnavigator\service;
 
 defined('MOODLE_INTERNAL') || die();
 
+require_once(__DIR__ . '/provider/http_json_client.php');
+
 class custom_http_ai_provider implements ai_provider_interface {
     private string $endpoint;
     private string $model;
@@ -44,7 +46,7 @@ class custom_http_ai_provider implements ai_provider_interface {
             'model' => $this->model !== '' ? $this->model : 'default',
             'system' => $systemprompt,
             'prompt' => $prompt,
-            'max_tokens' => (string) $maxtokens,
+            'max_tokens' => (string)$maxtokens,
             'apikey' => $this->apikey,
         ]);
 
@@ -54,55 +56,32 @@ class custom_http_ai_provider implements ai_provider_interface {
             return 'Errore Custom HTTP API: request template non produce JSON valido. JSON error: ' . json_last_error_msg();
         }
 
-        $headers = $this->build_headers();
-
-        $curl = curl_init($this->endpoint);
-
-        if ($curl === false) {
-            return 'Errore Custom HTTP API: impossibile inizializzare cURL.';
-        }
-
-        curl_setopt_array($curl, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_CONNECTTIMEOUT => 20,
-            CURLOPT_TIMEOUT => 120,
-            CURLOPT_USERAGENT => 'Moodle local_aiskillnavigator custom_http',
-        ]);
-
-        $raw = curl_exec($curl);
-        $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        $curlerror = curl_error($curl);
-        curl_close($curl);
-
-        if ($raw === false) {
-            return 'Errore Custom HTTP API cURL: ' . $curlerror;
-        }
-
-        if ($status >= 400) {
-            return 'Errore Custom HTTP API HTTP ' . $status . ': ' . substr((string) $raw, 0, 800);
-        }
+        $client = new provider\http_json_client();
+        $response = $client->post($this->endpoint, $payload, $this->build_headers(), 75);
 
         if ($this->responsepath === '_raw') {
-            return trim((string) $raw);
+            $raw = trim((string)($response['raw'] ?? ''));
+            return $raw !== '' ? $raw : 'Errore Custom HTTP API: risposta raw vuota.';
         }
 
-        $decoded = json_decode((string) $raw, true);
-
-        if (!is_array($decoded)) {
-            return trim((string) $raw);
+        if (empty($response['ok'])) {
+            return $this->error($response);
         }
 
-        $answer = $this->value_by_path($decoded, $this->responsepath);
+        $body = $response['body'] ?? null;
+
+        if (!is_array($body)) {
+            return trim((string)($response['raw'] ?? ''));
+        }
+
+        $path = $this->responsepath !== '' ? $this->responsepath : 'choices.0.message.content';
+        $answer = $this->value_by_path($body, $path);
 
         if (is_array($answer)) {
             return json_encode($answer, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
 
-        $answer = trim((string) $answer);
-
+        $answer = trim((string)$answer);
         return $answer !== '' ? $answer : 'Errore Custom HTTP API: response path vuoto o non trovato.';
     }
 
@@ -121,8 +100,8 @@ class custom_http_ai_provider implements ai_provider_interface {
     private function render_template(string $template, array $values): string {
         foreach ($values as $key => $value) {
             $replacement = $key === 'max_tokens'
-                ? (string) ((int) $value)
-                : $this->escape_json_string((string) $value);
+                ? (string)((int)$value)
+                : $this->escape_json_string((string)$value);
 
             $template = str_replace('{{' . $key . '}}', $replacement, $template);
         }
@@ -146,8 +125,8 @@ class custom_http_ai_provider implements ai_provider_interface {
 
         if (is_array($decoded)) {
             foreach ($decoded as $name => $value) {
-                $name = trim((string) $name);
-                $value = str_replace('{{apikey}}', $this->apikey, (string) $value);
+                $name = trim((string)$name);
+                $value = str_replace('{{apikey}}', $this->apikey, (string)$value);
 
                 if ($name !== '' && $value !== '') {
                     $headers[] = $name . ': ' . $value;
@@ -167,23 +146,22 @@ class custom_http_ai_provider implements ai_provider_interface {
     }
 
     private function value_by_path(array $data, string $path) {
-        $path = trim($path);
-
-        if ($path === '') {
-            $path = 'choices.0.message.content';
-        }
-
         $current = $data;
-        $parts = explode('.', $path);
 
-        foreach ($parts as $part) {
+        foreach (explode('.', $path) as $part) {
+            $part = trim($part);
+
+            if ($part === '') {
+                continue;
+            }
+
             if (is_array($current) && array_key_exists($part, $current)) {
                 $current = $current[$part];
                 continue;
             }
 
-            if (is_array($current) && ctype_digit($part) && array_key_exists((int) $part, $current)) {
-                $current = $current[(int) $part];
+            if (is_array($current) && ctype_digit($part) && array_key_exists((int)$part, $current)) {
+                $current = $current[(int)$part];
                 continue;
             }
 
@@ -191,5 +169,23 @@ class custom_http_ai_provider implements ai_provider_interface {
         }
 
         return $current;
+    }
+
+    private function error(array $response): string {
+        $status = (int)($response['status'] ?? 0);
+        $body = $response['body'] ?? null;
+        $raw = trim((string)($response['raw'] ?? ''));
+        $error = trim((string)($response['error'] ?? ''));
+
+        if (is_array($body)) {
+            return 'Errore Custom HTTP API HTTP ' . $status . ': ' .
+                substr(json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 0, 900);
+        }
+
+        if ($error !== '') {
+            return 'Errore Custom HTTP API HTTP ' . $status . ': ' . substr($error, 0, 900);
+        }
+
+        return 'Errore Custom HTTP API HTTP ' . $status . ': ' . substr($raw, 0, 900);
     }
 }

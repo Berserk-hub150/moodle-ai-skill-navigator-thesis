@@ -35,10 +35,10 @@ if (!function_exists('local_aiskillnavigator_sync_course_resources')) {
             }
 
             $title = trim((string) ($doc['title'] ?? 'Course material'));
-            $title = core_text::substr($title, 0, 230);
+            $title = \core_text::substr($title, 0, 230);
 
             $sourcetitle = '[Course #' . $courseid . ' / cm #' . (int) $doc['cmid'] . '] ' . $title;
-            $sourcetitle = core_text::substr($sourcetitle, 0, 255);
+            $sourcetitle = \core_text::substr($sourcetitle, 0, 255);
 
             $existing = $DB->get_record('local_aiskillnav_material', [
                 'courseid' => $courseid,
@@ -339,8 +339,8 @@ if (!function_exists('local_aiskillnavigator_limit_material_text')) {
     function local_aiskillnavigator_limit_material_text(string $text): string {
         $text = trim((string) preg_replace('/\s+/u', ' ', $text));
 
-        if (core_text::strlen($text) > 30000) {
-            $text = core_text::substr($text, 0, 30000) . "\n[Content truncated for indexing]";
+        if (\core_text::strlen($text) > 30000) {
+            $text = \core_text::substr($text, 0, 30000) . "\n[Content truncated for indexing]";
         }
 
         return trim($text);
