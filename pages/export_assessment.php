@@ -1,6 +1,8 @@
 <?php
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ai_output_formatter.php');
+require_once(__DIR__ . '/../includes/back_to_course_helper.php');
 
 global $DB, $USER;
 

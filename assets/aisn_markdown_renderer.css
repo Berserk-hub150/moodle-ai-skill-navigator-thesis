@@ -1,0 +1,74 @@
+.aisn-md-output {
+    line-height: 1.65;
+    font-size: 1rem;
+}
+
+.aisn-md-output p {
+    margin: 0 0 12px;
+}
+
+.aisn-md-output table {
+    border-collapse: collapse;
+    margin: 14px 0 18px;
+    width: auto;
+    max-width: 100%;
+    background: #ffffff;
+}
+
+.aisn-md-output th,
+.aisn-md-output td {
+    border: 1px solid #d6d6d6;
+    padding: 9px 13px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.aisn-md-output th {
+    background: #f3f4f6;
+    font-weight: 800;
+}
+
+.aisn-md-output tr:nth-child(even) td {
+    background: #fafafa;
+}
+
+.aisn-md-output ul,
+.aisn-md-output ol {
+    margin: 8px 0 14px 24px;
+}
+
+.aisn-md-output li {
+    margin-bottom: 5px;
+}
+
+.aisn-md-output pre {
+    background: #111827;
+    color: #f9fafb;
+    padding: 12px;
+    border-radius: 10px;
+    overflow-x: auto;
+}
+
+.aisn-md-output code {
+    background: #f3f4f6;
+    padding: 2px 5px;
+    border-radius: 5px;
+}
+
+.aisn-md-output pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.aisn-md-math {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin: 10px 0 14px;
+    padding: 10px 12px;
+    border: 1px solid #d6d6d6;
+    border-radius: 8px;
+    background: #f8fafc;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.08rem;
+}

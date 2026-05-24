@@ -1,6 +1,8 @@
 <?php
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ai_output_formatter.php');
+require_once(__DIR__ . '/../includes/back_to_course_helper.php');
 require_once(__DIR__ . '/../includes/ui_style_helper.php');
 require_once(__DIR__ . '/../includes/course_resource_sync.php');
 require_once(__DIR__ . '/../includes/material_ai_policy.php');
@@ -308,8 +310,8 @@ if (empty($materials)) {
         echo html_writer::tag(
             'p',
             'Type: ' . s($material->materialtype) .
-            ' Â· RAG chunks: ' . (int)($chunkscounts[$materialid] ?? 0) .
-            ' Â· AI policy: ' . s(local_aiskillnavigator_ai_policy_label($material)),
+            ' ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· RAG chunks: ' . (int)($chunkscounts[$materialid] ?? 0) .
+            ' ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· AI policy: ' . s(local_aiskillnavigator_ai_policy_label($material)),
             ['class' => 'text-muted']
         );
 
@@ -373,11 +375,13 @@ if (empty($materials)) {
 echo html_writer::div(
     html_writer::link(
         new moodle_url('/local/aiskillnavigator/pages/index.php', ['courseid' => $courseid]),
-        'Back to plugin home',
+        'Back to course',
         ['class' => 'btn btn-secondary mt-3']
     )
 );
 
 echo html_writer::end_div();
 
+echo local_aisn_back_to_course_autofix((int)($courseid ?? optional_param('courseid', optional_param('id', 0, PARAM_INT), PARAM_INT)));
+if (function_exists('local_aisn_ai_output_formatter_assets')) { echo local_aisn_ai_output_formatter_assets(); }
 echo $OUTPUT->footer();

@@ -2,6 +2,8 @@
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ai_output_formatter.php');
+require_once(__DIR__ . '/../includes/back_to_course_helper.php');
 
 global $PAGE, $OUTPUT, $DB, $USER;
 
@@ -311,15 +313,13 @@ if (empty($attempts)) {
 }
 
 echo html_writer::div(
-    html_writer::link(
-        new moodle_url('/local/aiskillnavigator/index.php', ['courseid' => $courseid]),
-        'Back to plugin home',
-        ['class' => 'btn btn-secondary mt-3']
-    )
+    html_writer::link(new moodle_url('/course/view.php', ['id' => $courseid]), 'Back to course', ['class' => 'btn btn-secondary'])
 );
 
 echo html_writer::end_div();
 
+echo local_aisn_back_to_course_autofix((int)($courseid ?? optional_param('courseid', optional_param('id', 0, PARAM_INT), PARAM_INT)));
+if (function_exists('local_aisn_ai_output_formatter_assets')) { echo local_aisn_ai_output_formatter_assets(); }
 echo $OUTPUT->footer();
 
 

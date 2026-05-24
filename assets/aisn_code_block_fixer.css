@@ -1,0 +1,61 @@
+.aisn-code-tabs {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.aisn-code-lang-label {
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.aisn-copy-code-btn {
+    border: 1px solid #52525b;
+    background: #3f3f46;
+    color: #f8fafc;
+    border-radius: 7px;
+    padding: 4px 10px;
+    font-size: .82rem;
+    cursor: pointer;
+}
+
+.aisn-copy-code-btn:hover {
+    background: #52525b;
+}
+
+.aisn-code-usage-title {
+    margin: 14px 0 8px;
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.aisn-code-usage-block {
+    margin: 8px 0 14px;
+    border-radius: 9px;
+    overflow: hidden;
+    background: #2f2f2f;
+    border: 1px solid #4b5563;
+}
+
+.aisn-code-usage-block pre {
+    margin: 0;
+    background: #343434;
+    color: #f8fafc;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-family: Consolas, Monaco, "Courier New", monospace;
+    font-size: .94rem;
+    line-height: 1.45;
+}
+
+.aisn-code-usage-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #252525;
+    padding: 8px 12px;
+    color: #ffffff;
+    font-weight: 800;
+    font-size: .9rem;
+}

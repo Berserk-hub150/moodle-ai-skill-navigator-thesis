@@ -1,0 +1,74 @@
+.aisn-md-rendered {
+    line-height: 1.65;
+    font-size: 1rem;
+}
+
+.aisn-md-rendered p {
+    margin: 0 0 12px;
+}
+
+.aisn-md-rendered-table-wrap {
+    overflow-x: auto;
+    margin: 16px 0 18px;
+}
+
+.aisn-md-rendered table {
+    border-collapse: collapse;
+    width: auto;
+    max-width: 100%;
+    background: #ffffff;
+    font-size: 1rem;
+}
+
+.aisn-md-rendered th,
+.aisn-md-rendered td {
+    border: 1px solid #d0d7de;
+    padding: 9px 13px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.aisn-md-rendered th {
+    background: #f6f8fa;
+    font-weight: 800;
+}
+
+.aisn-md-rendered tr:nth-child(even) td {
+    background: #fbfbfb;
+}
+
+.aisn-md-rendered ul,
+.aisn-md-rendered ol {
+    margin: 8px 0 14px 24px;
+}
+
+.aisn-md-rendered li {
+    margin-bottom: 5px;
+}
+
+.aisn-md-rendered code {
+    background: #f3f4f6;
+    border-radius: 5px;
+    padding: 2px 5px;
+}
+
+.aisn-md-rendered pre {
+    background: #111827;
+    color: #f9fafb;
+    border-radius: 10px;
+    padding: 12px;
+    overflow-x: auto;
+}
+
+.aisn-md-math {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin: 10px 0 14px;
+    padding: 10px 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    background: #f8fafc;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.08rem;
+}

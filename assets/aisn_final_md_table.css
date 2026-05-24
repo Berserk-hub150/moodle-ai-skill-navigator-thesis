@@ -1,0 +1,103 @@
+.aisn-final-md-output {
+    line-height: 1.65;
+    font-size: 1rem;
+}
+
+.aisn-final-md-output p {
+    margin: 0 0 12px;
+}
+
+.aisn-final-table-wrap {
+    overflow-x: auto;
+    margin: 14px 0 18px;
+}
+
+.aisn-final-md-output table {
+    border-collapse: collapse;
+    width: auto;
+    max-width: 100%;
+    background: #fff;
+}
+
+.aisn-final-md-output th,
+.aisn-final-md-output td {
+    border: 1px solid #d0d7de;
+    padding: 9px 13px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.aisn-final-md-output th {
+    background: #f6f8fa;
+    font-weight: 800;
+}
+
+.aisn-final-md-output tr:nth-child(even) td {
+    background: #fbfbfb;
+}
+
+.aisn-final-md-output ul,
+.aisn-final-md-output ol {
+    margin: 8px 0 14px 24px;
+}
+
+.aisn-final-code-editor {
+    margin: 16px 0 18px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #2f2f2f;
+    border: 1px solid #4b5563;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .18);
+}
+
+.aisn-code-tabs {
+    display: flex;
+    align-items: center;
+    background: #252525;
+    color: #ffffff;
+    padding: 9px 14px;
+    font-family: Arial, sans-serif;
+    font-size: .92rem;
+    font-weight: 800;
+}
+
+.aisn-final-code-editor pre {
+    margin: 0;
+    background: #343434;
+    color: #f8fafc;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: Consolas, Monaco, "Courier New", monospace;
+    font-size: .96rem;
+    line-height: 1.55;
+}
+
+.aisn-final-code-editor code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    border-radius: 0;
+    white-space: pre;
+}
+
+.aisn-inline-code {
+    background: #f3f4f6;
+    border-radius: 5px;
+    padding: 2px 5px;
+    font-family: Consolas, Monaco, "Courier New", monospace;
+}
+
+.aisn-final-math {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    overflow-x: auto;
+    background: #f8fafc;
+    border: 1px solid #d0d7de;
+    border-left: 5px solid #0f6cbf;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 12px 0;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.08rem;
+}

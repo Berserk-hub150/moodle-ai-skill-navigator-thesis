@@ -1,6 +1,8 @@
 <?php
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ai_output_formatter.php');
+require_once(__DIR__ . '/../includes/back_to_course_helper.php');
 require_once(__DIR__ . '/../includes/ui_style_helper.php');
 require_once(__DIR__ . '/../classes/service/web_search_service.php');
 
@@ -321,8 +323,8 @@ if ($action === 'generate') {
         $prompt .= "2. Istruzioni\n";
         $prompt .= "3. Simulatore/tool consigliato\n";
         $prompt .= "4. Link/fonte\n";
-        $prompt .= "5. PerchÃ© questo simulatore Ã¨ adatto\n";
-        $prompt .= "6. Alternativa se nessun simulatore Ã¨ disponibile\n";
+        $prompt .= "5. PerchÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© questo simulatore ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ adatto\n";
+        $prompt .= "6. Alternativa se nessun simulatore ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ disponibile\n";
         $prompt .= "7. Criteri di valutazione\n";
 
         $result = local_aiskillnavigator_sim_call_ai(
@@ -411,7 +413,7 @@ echo ' ';
 
 echo html_writer::link(
     new moodle_url('/local/aiskillnavigator/pages/index.php', ['courseid' => $courseid]),
-    'Back to plugin home',
+    'Back to course',
     ['class' => 'btn btn-secondary']
 );
 
@@ -462,4 +464,6 @@ if ($result !== '') {
 
 echo html_writer::end_div();
 
+echo local_aisn_back_to_course_autofix((int)($courseid ?? optional_param('courseid', optional_param('id', 0, PARAM_INT), PARAM_INT)));
+if (function_exists('local_aisn_ai_output_formatter_assets')) { echo local_aisn_ai_output_formatter_assets(); }
 echo $OUTPUT->footer();

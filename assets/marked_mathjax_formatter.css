@@ -1,0 +1,53 @@
+.aisn-marked-output {
+    line-height: 1.65;
+    font-size: 1rem;
+}
+
+.aisn-marked-output table {
+    border-collapse: collapse;
+    width: auto;
+    max-width: 100%;
+    margin: 14px 0;
+    background: #fff;
+}
+
+.aisn-marked-output th,
+.aisn-marked-output td {
+    border: 1px solid #d6d6d6;
+    padding: 9px 13px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.aisn-marked-output th {
+    background: #f3f4f6;
+    font-weight: 800;
+}
+
+.aisn-marked-output tr:nth-child(even) td {
+    background: #fafafa;
+}
+
+.aisn-marked-output pre {
+    background: #111827;
+    color: #f9fafb;
+    border-radius: 10px;
+    padding: 12px;
+    overflow-x: auto;
+}
+
+.aisn-marked-output code {
+    background: #f3f4f6;
+    border-radius: 5px;
+    padding: 2px 5px;
+}
+
+.aisn-marked-output pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.aisn-used-materials {
+    color: #64748b;
+    margin-bottom: 12px;
+}

@@ -2,6 +2,9 @@
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ai_output_formatter.php');
+require_once(__DIR__ . '/../includes/back_to_course_helper.php');
+require_once(__DIR__ . '/../includes/tutor_signal_helper.php');
 require_once(__DIR__ . '/../includes/ui_style_helper.php');
 require_once(__DIR__ . '/../includes/course_resource_sync.php');
 require_once(__DIR__ . '/../includes/callisto_real_features.php');
@@ -394,11 +397,7 @@ if (empty($attempts)) {
 }
 
 echo html_writer::div(
-    html_writer::link(
-        new moodle_url('/local/aiskillnavigator/index.php', ['courseid' => $courseid]),
-        'Back to plugin home',
-        ['class' => 'btn btn-secondary mt-3']
-    )
+    html_writer::link(new moodle_url('/course/view.php', ['id' => $courseid]), 'Back to course', ['class' => 'btn btn-secondary'])
 );
 
 echo html_writer::end_div();
@@ -412,27 +411,22 @@ if (function_exists('local_aiskillnavigator_render_course_builder_panel') && iss
 if (function_exists('local_aiskillnavigator_render_external_baseline_panel')) {
 }
 // END CALLISTO_REAL_FEATURES
-echo local_aisn_hide_teacher_coursebuilder_duplicate();
-echo $OUTPUT->footer();
-
-
-
-if (!function_exists('local_aisn_hide_teacher_coursebuilder_duplicate')) {
-    function local_aisn_hide_teacher_coursebuilder_duplicate(): string {
-        return <<<'HTML'
-<script id="aisn-hide-teacher-coursebuilder-v1">
+echo local_aiskillnavigator_tutor_signal_teacher_panel((int)$courseid);
+echo html_writer::tag('script', "
 document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('h2,h3,h4').forEach(function (h) {
+    document.querySelectorAll('h1,h2,h3,h4').forEach(function (h) {
         var txt = (h.textContent || '').trim().toLowerCase();
         if (txt.indexOf('ai course builder from website/material') !== -1) {
-            var card = h.closest('.card');
+            var card = h.closest('.card') || h.closest('section') || h.parentElement;
             if (card) {
                 card.remove();
             }
         }
     });
 });
-</script>
-HTML;
-    }
-}
+");
+echo local_aisn_back_to_course_autofix((int)($courseid ?? optional_param('courseid', optional_param('id', 0, PARAM_INT), PARAM_INT)));
+if (function_exists('local_aisn_ai_output_formatter_assets')) { echo local_aisn_ai_output_formatter_assets(); }
+echo $OUTPUT->footer();
+
+
