@@ -8,3 +8,8 @@ backup_*
 *.bak*
 backup_*
 
+# Local backup files generated during development
+*.bak_*
+*.backup
+backup_*/
+**/backup_*/
