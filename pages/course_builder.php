@@ -51,6 +51,75 @@ function local_aisn_p2m_low(string $text): string {
     return core_text::strtolower(trim($text));
 }
 
+
+function local_aisn_p2m_section_text(string $text): string {
+    $text = strip_tags($text);
+    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = str_replace(["\xC2\xA0", "\t", "\r", "\n"], ' ', $text);
+    $text = str_replace(['â€œ', 'â€', 'â€ž', 'Â«', 'Â»', 'â€˜', 'â€™', '`'], '"', $text);
+    $text = preg_replace('/\s+/u', ' ', (string)$text);
+    $text = trim((string)$text);
+    $text = trim($text, " \t\n\r\0\x0B\"'.,:;()[]{}");
+
+    $text = preg_replace('/^(?:la|il|lo|una|un)\s+/iu', '', (string)$text);
+    $text = preg_replace('/^(?:sezione|sezioni|section)\s+/iu', '', (string)$text);
+    $text = preg_replace('/^(?:numero|num\.?|n\.?|#)\s*/iu', '', (string)$text);
+    $text = preg_replace('/^(?:chiamata|dal titolo|intitolata|nome)\s+/iu', '', (string)$text);
+    $text = preg_replace('/\s+(?:del corso|nel corso|corrente)$/iu', '', (string)$text);
+
+    $text = trim((string)$text);
+    $text = trim($text, " \t\n\r\0\x0B\"'.,:;()[]{}");
+    $text = preg_replace('/\s+/u', ' ', (string)$text);
+
+    return trim((string)$text);
+}
+
+function local_aisn_p2m_section_key(string $text): string {
+    $text = local_aisn_p2m_low(local_aisn_p2m_section_text($text));
+    $text = preg_replace('/[^\p{L}\p{N}]+/u', '', (string)$text);
+    return trim((string)$text);
+}
+
+function local_aisn_p2m_section_tokens(string $text): array {
+    $text = local_aisn_p2m_low(local_aisn_p2m_section_text($text));
+    $text = preg_replace('/[^\p{L}\p{N}]+/u', ' ', (string)$text);
+    $parts = preg_split('/\s+/u', trim((string)$text));
+    return array_values(array_filter((array)$parts, function ($p) {
+        return core_text::strlen((string)$p) >= 2;
+    }));
+}
+
+function local_aisn_p2m_all_tokens_match(array $needles, string $haystack): bool {
+    if (empty($needles)) {
+        return false;
+    }
+
+    $haystack = local_aisn_p2m_low($haystack);
+
+    foreach ($needles as $token) {
+        if (!str_contains($haystack, local_aisn_p2m_low((string)$token))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function local_aisn_p2m_clean_section_title(string $title, int $max = 120): string {
+    $title = local_aisn_p2m_section_text($title);
+
+    if ($title === '') {
+        return 'Nuova sezione';
+    }
+
+    if (core_text::strlen($title) > $max) {
+        $title = core_text::substr($title, 0, $max);
+    }
+
+    return trim($title);
+}
+
+
 function local_aisn_p2m_next_section(int $courseid): int {
     global $DB;
     $max = $DB->get_field_sql('SELECT MAX(section) FROM {course_sections} WHERE course = ?', [$courseid]);
@@ -65,8 +134,7 @@ function local_aisn_p2m_get_section(int $courseid, int $sectionnum): ?stdClass {
 function local_aisn_p2m_find_section(int $courseid, string $ref): ?stdClass {
     global $DB;
 
-    $ref = trim($ref);
-    $ref = trim($ref, "\"' .,:;");
+    $ref = local_aisn_p2m_section_text($ref);
 
     if ($ref === '') {
         return null;
@@ -76,20 +144,41 @@ function local_aisn_p2m_find_section(int $courseid, string $ref): ?stdClass {
         return local_aisn_p2m_get_section($courseid, (int)$ref);
     }
 
+    $reflow = local_aisn_p2m_low($ref);
+    $refkey = local_aisn_p2m_section_key($ref);
+    $reftokens = local_aisn_p2m_section_tokens($ref);
     $sections = $DB->get_records('course_sections', ['course' => $courseid], 'section ASC');
 
     foreach ($sections as $section) {
-        $name = trim((string)($section->name ?? ''));
+        $name = local_aisn_p2m_section_text((string)($section->name ?? ''));
 
-        if ($name !== '' && local_aisn_p2m_low($name) === local_aisn_p2m_low($ref)) {
+        if ($name !== '' && local_aisn_p2m_low($name) === $reflow) {
             return $section;
         }
     }
 
     foreach ($sections as $section) {
-        $name = trim((string)($section->name ?? ''));
+        $namekey = local_aisn_p2m_section_key((string)($section->name ?? ''));
 
-        if ($name !== '' && str_contains(local_aisn_p2m_low($name), local_aisn_p2m_low($ref))) {
+        if ($namekey !== '' && $refkey !== '' && $namekey === $refkey) {
+            return $section;
+        }
+    }
+
+    foreach ($sections as $section) {
+        $name = local_aisn_p2m_section_text((string)($section->name ?? ''));
+        $namekey = local_aisn_p2m_section_key($name);
+
+        if ($namekey === '' || $refkey === '') {
+            continue;
+        }
+
+        if (core_text::strlen($refkey) >= 3 &&
+            (str_contains($namekey, $refkey) || str_contains($refkey, $namekey))) {
+            return $section;
+        }
+
+        if (local_aisn_p2m_all_tokens_match($reftokens, $name)) {
             return $section;
         }
     }
@@ -118,7 +207,7 @@ function local_aisn_p2m_create_section(int $courseid, string $title, string $sum
         $section->id = $DB->insert_record('course_sections', $section);
     }
 
-    $section->name = local_aisn_p2m_clean($title, 120);
+    $section->name = local_aisn_p2m_clean_section_title($title, 120);
     $section->summary = $summary !== '' ? $summary : '<p>Sezione creata da AI Course Builder tramite prompt docente.</p>';
     $section->summaryformat = FORMAT_HTML;
     $section->visible = 1;
@@ -133,7 +222,7 @@ function local_aisn_p2m_update_section(stdClass $section, string $title = '', st
     global $DB;
 
     if ($title !== '') {
-        $section->name = local_aisn_p2m_clean($title, 120);
+        $section->name = local_aisn_p2m_clean_section_title($title, 120);
     }
 
     if ($summary !== '') {
@@ -360,8 +449,8 @@ function local_aisn_p2m_execute_prompt(int $courseid, int $userid, string $promp
         $low = local_aisn_p2m_low($line);
 
         if (preg_match('/^(crea|aggiungi|inserisci|metti|mettimi|fammi|prepara|preparami|costruisci)(mi)?\s+(una\s+)?sezion[ei]\s+["ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ]?(.+?)["ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â]?$/iu', $line, $m)) {
-            $title = trim($m[4]);
-            $title = preg_replace('/^(chiamata|chiamata|dal titolo|intitolata)\s+/iu', '', $title);
+            $title = local_aisn_p2m_clean_section_title((string)$m[4]);
+            $title = local_aisn_p2m_clean_section_title($title);
             $section = local_aisn_p2m_create_section($courseid, $title);
             $createdsections[] = $section;
             $targetforfiles = $section;
@@ -757,7 +846,7 @@ function local_aisn_p2m_max_section_number(int $courseid): int {
 }
 
 function local_aisn_p2m_find_section_smart(int $courseid, string $target): ?stdClass {
-    $target = trim($target);
+    $target = local_aisn_p2m_section_text($target);
 
     if ($target === '') {
         return null;
