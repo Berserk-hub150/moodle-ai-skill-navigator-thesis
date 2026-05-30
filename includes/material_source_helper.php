@@ -184,6 +184,124 @@ if (!function_exists('local_aiskillnavigator_material_source_normalize_title_for
     }
 }
 
+function local_aisn_matlist_is_prompt(stdClass $material): bool {
+    $title = strtolower((string)($material->title ?? ''));
+
+    return str_contains($title, 'prompt-to-moodle')
+        || str_contains($title, 'prompt to moodle');
+}
+
+function local_aisn_matlist_clean_title(string $title): string {
+    $title = trim($title);
+    $title = preg_replace('/^\[Course #[0-9]+ \/ cm #[0-9]+\]\s*/u', '', $title);
+    $title = preg_replace('/^\[Prompt-to-Moodle\]\s*/iu', '', $title);
+    $title = preg_replace('/^\[Section\s+[0-9]+\]\s*/iu', '', $title);
+    $title = preg_replace('/^Materiale\s*-\s*/iu', '', $title);
+    $title = preg_replace('/^File\s*[:\-]?\s*/iu', '', $title);
+    $title = preg_replace('/\s+/u', ' ', $title);
+
+    return trim((string)$title);
+}
+
+function local_aisn_matlist_filename(stdClass $material): string {
+    $title = local_aisn_matlist_clean_title((string)($material->title ?? ''));
+    $content = (string)($material->content ?? '');
+
+    if (preg_match('/([^\[\]\r\n\/\\\\]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx))\b/iu', $title, $matches)) {
+        return strtolower(basename(str_replace('\\', '/', trim($matches[1]))));
+    }
+
+    if (preg_match('/^\s*File\s*[:\-]?\s*([^\r\n]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx))\b/iu', $content, $matches)) {
+        return strtolower(basename(str_replace('\\', '/', trim($matches[1]))));
+    }
+
+    return '';
+}
+
+function local_aisn_matlist_body_hash(stdClass $material): string {
+    $content = (string)($material->content ?? '');
+    $content = html_entity_decode($content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $content = preg_replace('/^\s*File\s*[:\-]?\s*[^\r\n]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx)\b[^\r\n]*[\r\n]*/iu', '', $content);
+    $content = preg_replace('/^\s*\[Prompt-to-Moodle\]\s*/iu', '', $content);
+    $content = preg_replace('/^\s*\[Section\s+[0-9]+\]\s*/iu', '', $content);
+    $content = preg_replace('/\s+/u', ' ', trim((string)$content));
+
+    if (core_text::strlen($content) < 80) {
+        return '';
+    }
+
+    return sha1(strtolower(core_text::substr($content, 0, 12000)));
+}
+
+function local_aisn_matlist_key(stdClass $material): string {
+    $filename = local_aisn_matlist_filename($material);
+    if ($filename !== '') {
+        return 'file:' . $filename;
+    }
+
+    $cleantitle = strtolower(local_aisn_matlist_clean_title((string)($material->title ?? '')));
+    if ($cleantitle !== '') {
+        return 'title:' . $cleantitle;
+    }
+
+    $bodyhash = local_aisn_matlist_body_hash($material);
+    if ($bodyhash !== '') {
+        return 'body:' . $bodyhash;
+    }
+
+    return 'id:' . (int)($material->id ?? 0);
+}
+
+function local_aisn_matlist_better(stdClass $current, stdClass $candidate): stdClass {
+    $currentprompt = local_aisn_matlist_is_prompt($current);
+    $candidateprompt = local_aisn_matlist_is_prompt($candidate);
+
+    if ($currentprompt !== $candidateprompt) {
+        return $candidateprompt ? $current : $candidate;
+    }
+
+    $currentcontent = core_text::strlen((string)($current->content ?? ''));
+    $candidatecontent = core_text::strlen((string)($candidate->content ?? ''));
+
+    if ($candidatecontent > $currentcontent) {
+        return $candidate;
+    }
+
+    return ((int)($candidate->id ?? 0) < (int)($current->id ?? 0)) ? $candidate : $current;
+}
+
+function local_aisn_matlist_dedupe(array $materials): array {
+    $deduped = [];
+    $keytoid = [];
+
+    foreach ($materials as $id => $material) {
+        if (!($material instanceof stdClass)) {
+            continue;
+        }
+
+        $key = local_aisn_matlist_key($material);
+
+        if (!isset($keytoid[$key])) {
+            $keytoid[$key] = (int)$id;
+            $deduped[(int)$id] = $material;
+            continue;
+        }
+
+        $existingid = $keytoid[$key];
+        $existing = $deduped[$existingid];
+
+        $better = local_aisn_matlist_better($existing, $material);
+
+        if ($better !== $existing) {
+            unset($deduped[$existingid]);
+            $keytoid[$key] = (int)$id;
+            $deduped[(int)$id] = $material;
+        }
+    }
+
+    return $deduped;
+}
+
 function local_aiskillnavigator_material_source_get_readable_materials(int $courseid, bool $includeall = true): array {
     global $DB, $CFG;
 
@@ -293,7 +411,7 @@ function local_aiskillnavigator_material_source_get_readable_materials(int $cour
         $readable[(int)$id] = $item['record'];
     }
 
-    return $readable;
+    return local_aisn_matlist_dedupe($readable);
 }
 
 
@@ -479,6 +597,8 @@ function local_aiskillnavigator_material_source_selector_html(
     string $label = 'Course material',
     string $help = ''
 ): string {
+    $materials = local_aisn_matlist_dedupe($materials);
+
     $sourcemode = 'selected';
 
     $allowedcount = 0;
