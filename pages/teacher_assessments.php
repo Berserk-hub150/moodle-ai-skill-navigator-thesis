@@ -238,6 +238,216 @@ function local_aiskillnavigator_assessment_badge(string $type): string {
     return html_writer::span('Pre-test', 'badge bg-info');
 }
 
+function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment, array $quiz, int $courseid): void {
+    $questions = isset($quiz['questions']) && is_array($quiz['questions']) ? array_values($quiz['questions']) : [];
+
+    for ($i = 0; $i < 5; $i++) {
+        if (!isset($questions[$i]) || !is_array($questions[$i])) {
+            $questions[$i] = [
+                'question' => '',
+                'options' => ['', '', '', ''],
+                'correct_index' => 0,
+                'skill' => '',
+                'explanation' => '',
+            ];
+        }
+
+        $questions[$i]['options'] = isset($questions[$i]['options']) && is_array($questions[$i]['options'])
+            ? array_values($questions[$i]['options'])
+            : ['', '', '', ''];
+
+        for ($j = 0; $j < 4; $j++) {
+            if (!isset($questions[$i]['options'][$j])) {
+                $questions[$i]['options'][$j] = '';
+            }
+        }
+    }
+
+    echo html_writer::start_div('card mb-4');
+    echo html_writer::start_div('card-body');
+
+    echo html_writer::tag('h3', 'Edit assessment');
+    echo html_writer::tag(
+        'p',
+        'Modify the AI-generated test according to your teaching needs. Changes are saved directly in the test shown to students.',
+        ['class' => 'text-muted']
+    );
+
+    echo html_writer::start_tag('form', [
+        'method' => 'post',
+        'action' => new moodle_url('/local/aiskillnavigator/pages/teacher_assessments.php'),
+    ]);
+
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => 'update']);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'courseid', 'value' => $courseid]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => (int)$assessment->id]);
+
+    echo html_writer::start_div('form-group');
+    echo html_writer::tag('label', 'Assessment title', ['for' => 'edit_title']);
+    echo html_writer::empty_tag('input', [
+        'type' => 'text',
+        'name' => 'title',
+        'id' => 'edit_title',
+        'class' => 'form-control',
+        'required' => 'required',
+        'value' => s((string)$assessment->title),
+    ]);
+    echo html_writer::end_div();
+
+    echo html_writer::start_div('form-group mt-3');
+    echo html_writer::tag('label', 'Focus / module', ['for' => 'edit_focus']);
+    echo html_writer::empty_tag('input', [
+        'type' => 'text',
+        'name' => 'focus',
+        'id' => 'edit_focus',
+        'class' => 'form-control',
+        'value' => s((string)$assessment->focus),
+    ]);
+    echo html_writer::end_div();
+
+    echo html_writer::start_div('form-group mt-3');
+    echo html_writer::tag('label', 'Difficulty', ['for' => 'edit_difficulty']);
+    echo html_writer::select(
+        [
+            'easy' => 'Easy',
+            'medium' => 'Medium',
+            'hard' => 'Hard',
+        ],
+        'difficulty',
+        (string)$assessment->difficulty,
+        false,
+        ['class' => 'form-control', 'id' => 'edit_difficulty']
+    );
+    echo html_writer::end_div();
+
+    echo html_writer::start_div('form-check mt-3');
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'visible', 'value' => 0]);
+    echo html_writer::empty_tag('input', [
+        'type' => 'checkbox',
+        'name' => 'visible',
+        'id' => 'edit_visible',
+        'class' => 'form-check-input',
+        'value' => 1,
+        'checked' => !empty($assessment->visible) ? 'checked' : null,
+    ]);
+    echo html_writer::tag('label', 'Published to students', ['for' => 'edit_visible', 'class' => 'form-check-label']);
+    echo html_writer::end_div();
+
+    echo html_writer::start_div('form-check mt-2');
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'resetattempts', 'value' => 0]);
+    echo html_writer::empty_tag('input', [
+        'type' => 'checkbox',
+        'name' => 'resetattempts',
+        'id' => 'resetattempts',
+        'class' => 'form-check-input',
+        'value' => 1,
+        'checked' => 'checked',
+    ]);
+    echo html_writer::tag(
+        'label',
+        'Reset previous student attempts after editing this test',
+        ['for' => 'resetattempts', 'class' => 'form-check-label']
+    );
+    echo html_writer::end_div();
+
+    echo html_writer::tag('hr', '');
+
+    for ($i = 0; $i < 5; $i++) {
+        $question = $questions[$i];
+        $options = array_values($question['options']);
+        $correct = isset($question['correct_index']) ? (int)$question['correct_index'] : 0;
+        $correct = max(0, min(3, $correct));
+
+        echo html_writer::start_div('card mb-3');
+        echo html_writer::start_div('card-body');
+        echo html_writer::tag('h4', 'Question ' . ($i + 1));
+
+        echo html_writer::start_div('form-group');
+        echo html_writer::tag('label', 'Question text', ['for' => 'q_' . $i]);
+        echo html_writer::tag('textarea', s((string)($question['question'] ?? '')), [
+            'name' => 'q_' . $i,
+            'id' => 'q_' . $i,
+            'class' => 'form-control',
+            'rows' => 3,
+            'required' => 'required',
+        ]);
+        echo html_writer::end_div();
+
+        for ($j = 0; $j < 4; $j++) {
+            echo html_writer::start_div('form-group mt-2');
+            echo html_writer::tag('label', 'Option ' . chr(65 + $j), ['for' => 'opt_' . $i . '_' . $j]);
+            echo html_writer::empty_tag('input', [
+                'type' => 'text',
+                'name' => 'opt_' . $i . '_' . $j,
+                'id' => 'opt_' . $i . '_' . $j,
+                'class' => 'form-control',
+                'required' => 'required',
+                'value' => s((string)$options[$j]),
+            ]);
+            echo html_writer::end_div();
+        }
+
+        echo html_writer::start_div('form-group mt-2');
+        echo html_writer::tag('label', 'Correct answer', ['for' => 'correct_' . $i]);
+        echo html_writer::select(
+            [
+                0 => 'A',
+                1 => 'B',
+                2 => 'C',
+                3 => 'D',
+            ],
+            'correct_' . $i,
+            $correct,
+            false,
+            ['class' => 'form-control', 'id' => 'correct_' . $i]
+        );
+        echo html_writer::end_div();
+
+        echo html_writer::start_div('form-group mt-2');
+        echo html_writer::tag('label', 'Skill evaluated', ['for' => 'skill_' . $i]);
+        echo html_writer::empty_tag('input', [
+            'type' => 'text',
+            'name' => 'skill_' . $i,
+            'id' => 'skill_' . $i,
+            'class' => 'form-control',
+            'value' => s((string)($question['skill'] ?? '')),
+        ]);
+        echo html_writer::end_div();
+
+        echo html_writer::start_div('form-group mt-2');
+        echo html_writer::tag('label', 'Explanation', ['for' => 'explanation_' . $i]);
+        echo html_writer::tag('textarea', s((string)($question['explanation'] ?? '')), [
+            'name' => 'explanation_' . $i,
+            'id' => 'explanation_' . $i,
+            'class' => 'form-control',
+            'rows' => 2,
+        ]);
+        echo html_writer::end_div();
+
+        echo html_writer::end_div();
+        echo html_writer::end_div();
+    }
+
+    echo html_writer::empty_tag('input', [
+        'type' => 'submit',
+        'class' => 'btn btn-primary',
+        'value' => 'Save test changes',
+    ]);
+
+    echo ' ';
+
+    echo html_writer::link(
+        new moodle_url('/local/aiskillnavigator/pages/teacher_assessments.php', ['courseid' => $courseid]),
+        'Cancel',
+        ['class' => 'btn btn-outline-secondary']
+    );
+
+    echo html_writer::end_tag('form');
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+}
+
 if ($action === 'delete') {
     require_sesskey();
 
@@ -261,6 +471,81 @@ if ($action === 'toggle') {
     $DB->update_record('local_aiskillnav_assessment', $assessment);
 
     $message = $assessment->visible ? 'Assessment published to students.' : 'Assessment hidden from students.';
+}
+
+if ($action === 'update') {
+    require_sesskey();
+
+    $id = required_param('id', PARAM_INT);
+    $assessment = $DB->get_record('local_aiskillnav_assessment', ['id' => $id, 'courseid' => $courseid], '*', MUST_EXIST);
+
+    $title = required_param('title', PARAM_TEXT);
+    $focus = optional_param('focus', '', PARAM_TEXT);
+    $difficulty = optional_param('difficulty', 'medium', PARAM_ALPHA);
+    $difficulty = in_array($difficulty, ['easy', 'medium', 'hard'], true) ? $difficulty : 'medium';
+    $visible = optional_param('visible', 0, PARAM_BOOL);
+    $resetattempts = optional_param('resetattempts', 0, PARAM_BOOL);
+
+    $questions = [];
+
+    for ($i = 0; $i < 5; $i++) {
+        $questiontext = required_param('q_' . $i, PARAM_RAW_TRIMMED);
+        $options = [];
+
+        for ($j = 0; $j < 4; $j++) {
+            $optiontext = required_param('opt_' . $i . '_' . $j, PARAM_RAW_TRIMMED);
+            $options[] = $optiontext;
+        }
+
+        $correct = optional_param('correct_' . $i, 0, PARAM_INT);
+        $correct = max(0, min(3, $correct));
+
+        $skill = optional_param('skill_' . $i, '', PARAM_TEXT);
+        $explanation = optional_param('explanation_' . $i, '', PARAM_RAW_TRIMMED);
+
+        if (trim($skill) === '') {
+            $skill = 'Concetto valutato';
+        }
+
+        if (trim($explanation) === '') {
+            $explanation = 'Risposta corretta per il concetto valutato.';
+        }
+
+        $questions[] = [
+            'question' => $questiontext,
+            'options' => $options,
+            'correct_index' => $correct,
+            'skill' => $skill,
+            'explanation' => $explanation,
+        ];
+    }
+
+    $oldquiz = json_decode((string)$assessment->quizjson, true);
+    if (!is_array($oldquiz)) {
+        $oldquiz = [];
+    }
+
+    $oldquiz['title'] = $title;
+    $oldquiz['topic'] = $focus !== '' ? $focus : ($oldquiz['topic'] ?? 'Assessment');
+    $oldquiz['type'] = (string)$assessment->assessmenttype;
+    $oldquiz['questions'] = $questions;
+
+    $assessment->title = $title;
+    $assessment->focus = $focus;
+    $assessment->difficulty = $difficulty;
+    $assessment->visible = $visible ? 1 : 0;
+    $assessment->quizjson = json_encode($oldquiz, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $assessment->timemodified = time();
+
+    $DB->update_record('local_aiskillnav_assessment', $assessment);
+
+    if ($resetattempts) {
+        $DB->delete_records('local_aiskillnav_ass_att', ['assessmentid' => $assessment->id]);
+    }
+
+    $message = $resetattempts
+        ? 'Assessment updated. Previous student attempts were reset.'
+        : 'Assessment updated.';
 }
 
 if ($action === 'generate') {
@@ -411,6 +696,38 @@ echo html_writer::tag(
 );
 
 echo html_writer::tag('p', 'Course: ' . s($course->fullname), ['class' => 'text-muted']);
+
+if ($action === 'edit') {
+    $id = required_param('id', PARAM_INT);
+    $editassessment = $DB->get_record('local_aiskillnav_assessment', ['id' => $id, 'courseid' => $courseid], '*', MUST_EXIST);
+    $editquiz = json_decode((string)$editassessment->quizjson, true);
+
+    if (!is_array($editquiz) || empty($editquiz['questions']) || !is_array($editquiz['questions'])) {
+        echo html_writer::div('This assessment cannot be edited because its JSON structure is invalid.', 'alert alert-danger');
+        echo html_writer::link(
+            new moodle_url('/local/aiskillnavigator/pages/teacher_assessments.php', ['courseid' => $courseid]),
+            'Back to assessments',
+            ['class' => 'btn btn-secondary']
+        );
+        echo html_writer::end_div();
+        echo local_aisn_back_to_course_autofix((int)$courseid);
+        if (function_exists('local_aisn_ai_output_formatter_assets')) {
+            echo local_aisn_ai_output_formatter_assets();
+        }
+        echo $OUTPUT->footer();
+        exit;
+    }
+
+    local_aiskillnavigator_assessment_render_edit_form($editassessment, $editquiz, $courseid);
+
+    echo html_writer::end_div();
+    echo local_aisn_back_to_course_autofix((int)$courseid);
+    if (function_exists('local_aisn_ai_output_formatter_assets')) {
+        echo local_aisn_ai_output_formatter_assets();
+    }
+    echo $OUTPUT->footer();
+    exit;
+}
 
 if ($message !== '') {
     echo html_writer::div(s($message), 'alert alert-success');
@@ -629,6 +946,16 @@ echo html_writer::start_div('card mb-3');
         );
 
         echo html_writer::end_div();
+        echo html_writer::link(
+            new moodle_url('/local/aiskillnavigator/pages/teacher_assessments.php', [
+                'courseid' => $courseid,
+                'action' => 'edit',
+                'id' => $assessment->id,
+            ]),
+            'Edit test',
+            ['class' => 'btn btn-outline-primary btn-sm mr-2']
+        );
+
 echo html_writer::link(
             new moodle_url('/local/aiskillnavigator/pages/teacher_assessments.php', [
                 'courseid' => $courseid,
