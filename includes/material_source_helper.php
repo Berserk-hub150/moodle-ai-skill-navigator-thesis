@@ -70,50 +70,31 @@ function local_aiskillnavigator_material_source_mode_from_request(int $defaultma
 
 
 if (!function_exists('local_aiskillnavigator_material_source_is_prompt_generated')) {
-    function local_aiskillnavigator_material_source_is_prompt_generated(stdClass $material): bool {
+    
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_normalize_filename_key')) {
+    
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_duplicate_key')) {
+    
+}
+
+
+
+
+
+
+
+function local_aiskillnavigator_material_source_is_prompt_generated(stdClass $material): bool {
     $title = strtolower((string)($material->title ?? ''));
 
     return str_contains($title, 'prompt-to-moodle')
         || str_contains($title, 'prompt to moodle');
 }
-}
 
-if (!function_exists('local_aiskillnavigator_material_source_normalize_filename_key')) {
-    function local_aiskillnavigator_material_source_normalize_filename_key(string $filename): string {
-    $filename = str_replace('\\', '/', trim($filename));
-    $filename = basename($filename);
-    $filename = strtolower($filename);
-    $filename = preg_replace('/\s+/u', ' ', $filename);
-
-    return trim((string)$filename);
-}
-}
-
-if (!function_exists('local_aiskillnavigator_material_source_duplicate_key')) {
-    function local_aiskillnavigator_material_source_duplicate_key(stdClass $material): string {
-    $title = (string)($material->title ?? '');
-    $content = (string)($material->content ?? '');
-
-    $filename = local_aiskillnavigator_material_source_extract_filename($title, $content);
-    $body = local_aiskillnavigator_material_source_normalize_content_for_dedupe($content);
-
-    if ($filename !== '' && strlen($body) >= 60) {
-        return 'filebody:' . $filename . ':' . sha1(substr($body, 0, 12000));
-    }
-
-    if (strlen($body) >= 120) {
-        return 'body:' . sha1(substr($body, 0, 12000));
-    }
-
-    if ($filename !== '') {
-        return 'file:' . $filename;
-    }
-
-    return '';
-}
-}
-
-function local_aiskillnavigator_material_source_normalize_title_for_dedupe(string $title): string {
+function local_aiskillnavigator_material_source_clean_course_title(string $title): string {
     $title = trim($title);
     $title = preg_replace('/^\[Course #[0-9]+ \/ cm #[0-9]+\]\s*/u', '', $title);
     $title = preg_replace('/^\[Prompt-to-Moodle\]\s*/iu', '', $title);
@@ -125,28 +106,47 @@ function local_aiskillnavigator_material_source_normalize_title_for_dedupe(strin
     return trim((string)$title);
 }
 
-function local_aiskillnavigator_material_source_extract_filename(string $title, string $content): string {
-    $cleantitle = local_aiskillnavigator_material_source_normalize_title_for_dedupe($title);
+function local_aiskillnavigator_material_source_filename_key(stdClass $material): string {
+    $title = local_aiskillnavigator_material_source_clean_course_title((string)($material->title ?? ''));
+    $content = (string)($material->content ?? '');
 
-    if (preg_match('/([^\[\]\r\n\/\\\\]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx))\b/iu', $cleantitle, $matches)) {
-        return local_aiskillnavigator_material_source_normalize_filename_key($matches[1]);
+    if (preg_match('/([^\[\]\r\n\/\\\\]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx))\b/iu', $title, $matches)) {
+        return strtolower(basename(str_replace('\\', '/', trim($matches[1]))));
     }
 
     if (preg_match('/^\s*File\s*[:\-]?\s*([^\r\n]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx))\b/iu', $content, $matches)) {
-        return local_aiskillnavigator_material_source_normalize_filename_key($matches[1]);
+        return strtolower(basename(str_replace('\\', '/', trim($matches[1]))));
     }
 
     return '';
 }
 
-function local_aiskillnavigator_material_source_normalize_content_for_dedupe(string $content): string {
+function local_aiskillnavigator_material_source_body_key(stdClass $material): string {
+    $content = (string)($material->content ?? '');
     $content = html_entity_decode($content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $content = preg_replace('/^\s*File\s*[:\-]?\s*[^\r\n]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx)\b[^\r\n]*[\r\n]*/iu', '', $content);
-    $content = preg_replace('/^\s*\[Prompt-to-Moodle\]\s*/iu', '', $content);
-    $content = preg_replace('/^\s*\[Section\s+[0-9]+\]\s*/iu', '', $content);
     $content = preg_replace('/\s+/u', ' ', trim((string)$content));
 
-    return strtolower($content);
+    if (strlen($content) < 120) {
+        return '';
+    }
+
+    return sha1(strtolower(substr($content, 0, 12000)));
+}
+
+function local_aiskillnavigator_material_source_duplicate_key(stdClass $material): string {
+    $filename = local_aiskillnavigator_material_source_filename_key($material);
+    $body = local_aiskillnavigator_material_source_body_key($material);
+
+    if ($filename !== '') {
+        return 'file:' . $filename;
+    }
+
+    if ($body !== '') {
+        return 'body:' . $body;
+    }
+
+    return '';
 }
 
 function local_aiskillnavigator_material_source_get_readable_materials(int $courseid, bool $includeall = true): array {
@@ -180,9 +180,7 @@ function local_aiskillnavigator_material_source_get_readable_materials(int $cour
     }
 
     $modinfo = get_fast_modinfo($courseid);
-    $readable = [];
-    $order = [];
-    $seenmaterialkeys = [];
+    $candidates = [];
 
     foreach ($records as $record) {
         if (trim((string)($record->content ?? '')) === '') {
@@ -202,44 +200,63 @@ function local_aiskillnavigator_material_source_get_readable_materials(int $cour
             continue;
         }
 
-        if (empty($modinfo->cms[$cmid])) {
+        if (empty($modinfo->cms[$cmid]) || empty($modinfo->cms[$cmid]->visible)) {
             continue;
         }
 
-        $cm = $modinfo->cms[$cmid];
-
-        if (empty($cm->visible)) {
-            continue;
-        }
-
-        $materialkey = local_aiskillnavigator_material_source_duplicate_key($record);
-        if ($materialkey !== '') {
-            if (isset($seenmaterialkeys[$materialkey])) {
-                $existingid = $seenmaterialkeys[$materialkey];
-                $existingrecord = $readable[$existingid] ?? null;
-                $existingprompt = $existingrecord ? local_aiskillnavigator_material_source_is_prompt_generated($existingrecord) : false;
-                $currentprompt = local_aiskillnavigator_material_source_is_prompt_generated($record);
-
-                if ($existingprompt && !$currentprompt) {
-                    unset($readable[$existingid], $order[$existingid]);
-                    $seenmaterialkeys[$materialkey] = (int)$record->id;
-                } else {
-                    continue;
-                }
-            } else {
-                $seenmaterialkeys[$materialkey] = (int)$record->id;
-            }
-        }
-
-        $readable[(int)$record->id] = $record;
-        $order[(int)$record->id] = (int)$cmid;
+        $candidates[(int)$record->id] = [
+            'record' => $record,
+            'cmid' => $cmid,
+            'filename' => local_aiskillnavigator_material_source_filename_key($record),
+            'dupekey' => local_aiskillnavigator_material_source_duplicate_key($record),
+            'prompt' => local_aiskillnavigator_material_source_is_prompt_generated($record),
+        ];
     }
 
-    uasort($readable, function($a, $b) use ($order) {
-        $aid = (int)$a->id;
-        $bid = (int)$b->id;
-        return ($order[$aid] ?? 999999) <=> ($order[$bid] ?? 999999);
+    if (empty($candidates)) {
+        return [];
+    }
+
+    $normalfilenames = [];
+
+    foreach ($candidates as $item) {
+        if ($item['filename'] !== '' && !$item['prompt']) {
+            $normalfilenames[$item['filename']] = true;
+        }
+    }
+
+    uasort($candidates, static function($a, $b) {
+        if ($a['cmid'] !== $b['cmid']) {
+            return $a['cmid'] <=> $b['cmid'];
+        }
+
+        if ($a['prompt'] !== $b['prompt']) {
+            return $a['prompt'] ? 1 : -1;
+        }
+
+        return ((int)$a['record']->id) <=> ((int)$b['record']->id);
     });
+
+    $readable = [];
+    $seen = [];
+
+    foreach ($candidates as $id => $item) {
+        if ($item['prompt'] && $item['filename'] !== '' && isset($normalfilenames[$item['filename']])) {
+            continue;
+        }
+
+        $key = $item['dupekey'];
+
+        if ($key !== '') {
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+        }
+
+        $readable[(int)$id] = $item['record'];
+    }
 
     return $readable;
 }
@@ -296,11 +313,7 @@ function local_aiskillnavigator_material_source_legacy_materialid(string $source
     return -1;
 }
 
-function local_aiskillnavigator_material_source_clean_title(stdClass $material): string {
-    $title = local_aiskillnavigator_material_source_normalize_title_for_dedupe((string)($material->title ?? 'Course material'));
 
-    return trim($title) !== '' ? trim($title) : 'Course material';
-}
 
 function local_aiskillnavigator_material_source_short_title(stdClass $material): string {
     return local_aiskillnavigator_material_source_clean_title($material) . ' (' . strlen((string)($material->content ?? '')) . ' chars)';

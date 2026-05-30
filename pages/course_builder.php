@@ -12,6 +12,7 @@ require_once(__DIR__ . '/../includes/ui_style_helper.php');
 require_once(__DIR__ . '/../classes/service/material_extractor.php');
 require_once(__DIR__ . '/../classes/service/ai_provider_interface.php');
 require_once(__DIR__ . '/../classes/service/ai_provider_factory.php');
+require_once(__DIR__ . '/../includes/course_resource_sync.php');
 
 global $DB, $PAGE, $OUTPUT, $CFG, $USER;
 
@@ -330,28 +331,11 @@ function local_aisn_p2m_extract_file_text(array $file): string {
 }
 
 function local_aisn_p2m_save_material_record(int $courseid, int $userid, int $sectionnum, string $title, string $content): int {
-    global $DB;
-
-    if (!local_aisn_p2m_table_exists('local_aiskillnav_material')) {
-        return 0;
-    }
-
-    $content = trim($content);
-
-    if ($content === '') {
-        return 0;
-    }
-
-    $record = new stdClass();
-    $record->courseid = $courseid;
-    $record->userid = $userid;
-    $record->title = '[Prompt-to-Moodle][Section ' . $sectionnum . '] ' . local_aisn_p2m_clean($title, 160);
-    $record->materialtype = 'prompt_to_moodle';
-    $record->content = $content;
-    $record->timecreated = time();
-    $record->timemodified = time();
-
-    return (int)$DB->insert_record('local_aiskillnav_material', $record);
+    // Source of truth policy:
+    // Prompt-to-Moodle must create real Moodle course resources only.
+    // The RAG/material table is populated later by course_resource_sync.php from visible Moodle course modules.
+    // This prevents duplicate material entries in AI selectors.
+    return 0;
 }
 
 function local_aisn_p2m_create_resource_from_file(int $courseid, int $sectionnum, array $file, string $resourcename): int {
@@ -407,12 +391,13 @@ function local_aisn_p2m_attach_files_to_section(int $courseid, int $userid, stdC
         $resourcename = 'Materiale - ' . ($filename !== '' ? $filename : 'file docente');
 
         $cmid = local_aisn_p2m_create_resource_from_file($courseid, (int)$section->section, $file, $resourcename);
-        $text = local_aisn_p2m_extract_file_text($file);
-        $materialid = local_aisn_p2m_save_material_record($courseid, $userid, (int)$section->section, $filename, $text);
 
         $logs[] = 'File "' . $filename . '" aggiunto alla sezione "' . (string)$section->name . '"' .
-            ($cmid > 0 ? ' come risorsa Moodle' : '') .
-            ($materialid > 0 ? ' e salvato per RAG ID ' . $materialid : '');
+            ($cmid > 0 ? ' come risorsa Moodle' : '');
+
+        if ($cmid > 0 && function_exists('local_aiskillnavigator_sync_course_resources')) {
+            local_aiskillnavigator_sync_course_resources($courseid, $userid, true);
+        }
     }
 
     return $logs;
