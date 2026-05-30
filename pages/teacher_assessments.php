@@ -239,7 +239,39 @@ function local_aiskillnavigator_assessment_badge(string $type): string {
     return html_writer::span('Pre-test', 'badge bg-info');
 }
 
-function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment, array $quiz, int $courseid): void {
+function local_aiskillnavigator_assessment_question_from_form(int $index): array {
+    $questiontext = required_param('q_' . $index, PARAM_RAW_TRIMMED);
+    $options = [];
+
+    for ($i = 0; $i < 4; $i++) {
+        $options[] = required_param('opt_' . $index . '_' . $i, PARAM_RAW_TRIMMED);
+    }
+
+    $correct = optional_param('correct_' . $index, 0, PARAM_INT);
+    $correct = max(0, min(3, $correct));
+
+    $skill = optional_param('skill_' . $index, '', PARAM_TEXT);
+    $explanation = optional_param('explanation_' . $index, '', PARAM_RAW_TRIMMED);
+
+    if (trim($skill) === '') {
+        $skill = 'Concetto valutato';
+    }
+
+    if (trim($explanation) === '') {
+        $explanation = 'Risposta corretta per il concetto valutato.';
+    }
+
+    return [
+        'question' => $questiontext,
+        'options' => $options,
+        'correct_index' => $correct,
+        'skill' => $skill,
+        'ability' => $skill,
+        'explanation' => $explanation,
+    ];
+}
+
+function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment, array $quiz, int $courseid, int $attemptcount): void {
     $questions = isset($quiz['questions']) && is_array($quiz['questions']) ? array_values($quiz['questions']) : [];
 
     for ($i = 0; $i < 5; $i++) {
@@ -249,6 +281,7 @@ function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment
                 'options' => ['', '', '', ''],
                 'correct_index' => 0,
                 'skill' => '',
+                'ability' => '',
                 'explanation' => '',
             ];
         }
@@ -267,12 +300,19 @@ function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment
     echo html_writer::start_div('card mb-4');
     echo html_writer::start_div('card-body');
 
-    echo html_writer::tag('h3', 'Edit assessment');
+    echo html_writer::tag('h3', 'Edit test');
     echo html_writer::tag(
         'p',
-        'Modify the AI-generated test according to your teaching needs. Changes are saved directly in the test shown to students.',
+        'The teacher can modify questions, options, correct answers and explanations. The assessment type is not changed here, so initial/final test data stays coherent.',
         ['class' => 'text-muted']
     );
+
+    if ($attemptcount > 0) {
+        echo html_writer::div(
+            'This test already has ' . $attemptcount . ' student attempt(s). Saving changes will automatically reset previous attempts and statistics, so students must take the updated test again.',
+            'alert alert-warning'
+        );
+    }
 
     echo html_writer::start_tag('form', [
         'method' => 'post',
@@ -297,6 +337,15 @@ function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment
     echo html_writer::end_div();
 
     echo html_writer::start_div('form-group mt-3');
+    echo html_writer::tag('label', 'Assessment type');
+    echo html_writer::tag(
+        'div',
+        $assessment->assessmenttype === 'final' ? 'Final comprehension test / post-test' : 'Initial diagnostic quiz / pre-test',
+        ['class' => 'form-control-plaintext font-weight-bold']
+    );
+    echo html_writer::end_div();
+
+    echo html_writer::start_div('form-group mt-3');
     echo html_writer::tag('label', 'Focus / module', ['for' => 'edit_focus']);
     echo html_writer::empty_tag('input', [
         'type' => 'text',
@@ -310,11 +359,7 @@ function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment
     echo html_writer::start_div('form-group mt-3');
     echo html_writer::tag('label', 'Difficulty', ['for' => 'edit_difficulty']);
     echo html_writer::select(
-        [
-            'easy' => 'Easy',
-            'medium' => 'Medium',
-            'hard' => 'Hard',
-        ],
+        ['easy' => 'Easy', 'medium' => 'Medium', 'hard' => 'Hard'],
         'difficulty',
         (string)$assessment->difficulty,
         false,
@@ -324,32 +369,18 @@ function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment
 
     echo html_writer::start_div('form-check mt-3');
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'visible', 'value' => 0]);
-    echo html_writer::empty_tag('input', [
+    $visibleattrs = [
         'type' => 'checkbox',
         'name' => 'visible',
         'id' => 'edit_visible',
         'class' => 'form-check-input',
         'value' => 1,
-        'checked' => !empty($assessment->visible) ? 'checked' : null,
-    ]);
+    ];
+    if (!empty($assessment->visible)) {
+        $visibleattrs['checked'] = 'checked';
+    }
+    echo html_writer::empty_tag('input', $visibleattrs);
     echo html_writer::tag('label', 'Published to students', ['for' => 'edit_visible', 'class' => 'form-check-label']);
-    echo html_writer::end_div();
-
-    echo html_writer::start_div('form-check mt-2');
-    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'resetattempts', 'value' => 0]);
-    echo html_writer::empty_tag('input', [
-        'type' => 'checkbox',
-        'name' => 'resetattempts',
-        'id' => 'resetattempts',
-        'class' => 'form-check-input',
-        'value' => 1,
-        'checked' => 'checked',
-    ]);
-    echo html_writer::tag(
-        'label',
-        'Reset previous student attempts after editing this test',
-        ['for' => 'resetattempts', 'class' => 'form-check-label']
-    );
     echo html_writer::end_div();
 
     echo html_writer::tag('hr', '');
@@ -359,6 +390,7 @@ function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment
         $options = array_values($question['options']);
         $correct = isset($question['correct_index']) ? (int)$question['correct_index'] : 0;
         $correct = max(0, min(3, $correct));
+        $skill = (string)($question['skill'] ?? $question['ability'] ?? '');
 
         echo html_writer::start_div('card mb-3');
         echo html_writer::start_div('card-body');
@@ -391,28 +423,20 @@ function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment
 
         echo html_writer::start_div('form-group mt-2');
         echo html_writer::tag('label', 'Correct answer', ['for' => 'correct_' . $i]);
-        echo html_writer::select(
-            [
-                0 => 'A',
-                1 => 'B',
-                2 => 'C',
-                3 => 'D',
-            ],
-            'correct_' . $i,
-            $correct,
-            false,
-            ['class' => 'form-control', 'id' => 'correct_' . $i]
-        );
+        echo html_writer::select([0 => 'A', 1 => 'B', 2 => 'C', 3 => 'D'], 'correct_' . $i, $correct, false, [
+            'class' => 'form-control',
+            'id' => 'correct_' . $i,
+        ]);
         echo html_writer::end_div();
 
         echo html_writer::start_div('form-group mt-2');
-        echo html_writer::tag('label', 'Skill evaluated', ['for' => 'skill_' . $i]);
+        echo html_writer::tag('label', 'Ability / skill evaluated', ['for' => 'skill_' . $i]);
         echo html_writer::empty_tag('input', [
             'type' => 'text',
             'name' => 'skill_' . $i,
             'id' => 'skill_' . $i,
             'class' => 'form-control',
-            'value' => s((string)($question['skill'] ?? '')),
+            'value' => s($skill),
         ]);
         echo html_writer::end_div();
 
@@ -433,11 +457,9 @@ function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment
     echo html_writer::empty_tag('input', [
         'type' => 'submit',
         'class' => 'btn btn-primary',
-        'value' => 'Save test changes',
+        'value' => $attemptcount > 0 ? 'Save changes and reset attempts' : 'Save test changes',
     ]);
-
     echo ' ';
-
     echo html_writer::link(
         new moodle_url('/local/aiskillnavigator/pages/teacher_assessments.php', ['courseid' => $courseid]),
         'Cancel',
@@ -448,6 +470,8 @@ function local_aiskillnavigator_assessment_render_edit_form(stdClass $assessment
     echo html_writer::end_div();
     echo html_writer::end_div();
 }
+
+
 
 if ($action === 'delete') {
     require_sesskey();
@@ -479,46 +503,17 @@ if ($action === 'update') {
 
     $id = required_param('id', PARAM_INT);
     $assessment = $DB->get_record('local_aiskillnav_assessment', ['id' => $id, 'courseid' => $courseid], '*', MUST_EXIST);
+    $attemptcount = $DB->count_records('local_aiskillnav_ass_att', ['assessmentid' => $assessment->id]);
 
     $title = required_param('title', PARAM_TEXT);
     $focus = optional_param('focus', '', PARAM_TEXT);
     $difficulty = optional_param('difficulty', 'medium', PARAM_ALPHA);
     $difficulty = in_array($difficulty, ['easy', 'medium', 'hard'], true) ? $difficulty : 'medium';
     $visible = optional_param('visible', 0, PARAM_BOOL);
-    $resetattempts = optional_param('resetattempts', 0, PARAM_BOOL);
 
     $questions = [];
-
     for ($i = 0; $i < 5; $i++) {
-        $questiontext = required_param('q_' . $i, PARAM_RAW_TRIMMED);
-        $options = [];
-
-        for ($j = 0; $j < 4; $j++) {
-            $optiontext = required_param('opt_' . $i . '_' . $j, PARAM_RAW_TRIMMED);
-            $options[] = $optiontext;
-        }
-
-        $correct = optional_param('correct_' . $i, 0, PARAM_INT);
-        $correct = max(0, min(3, $correct));
-
-        $skill = optional_param('skill_' . $i, '', PARAM_TEXT);
-        $explanation = optional_param('explanation_' . $i, '', PARAM_RAW_TRIMMED);
-
-        if (trim($skill) === '') {
-            $skill = 'Concetto valutato';
-        }
-
-        if (trim($explanation) === '') {
-            $explanation = 'Risposta corretta per il concetto valutato.';
-        }
-
-        $questions[] = [
-            'question' => $questiontext,
-            'options' => $options,
-            'correct_index' => $correct,
-            'skill' => $skill,
-            'explanation' => $explanation,
-        ];
+        $questions[] = local_aiskillnavigator_assessment_question_from_form($i);
     }
 
     $oldquiz = json_decode((string)$assessment->quizjson, true);
@@ -540,13 +535,12 @@ if ($action === 'update') {
 
     $DB->update_record('local_aiskillnav_assessment', $assessment);
 
-    if ($resetattempts) {
+    if ($attemptcount > 0) {
         $DB->delete_records('local_aiskillnav_ass_att', ['assessmentid' => $assessment->id]);
+        $message = 'Assessment updated. Previous student attempts and statistics were reset because the test changed.';
+    } else {
+        $message = 'Assessment updated.';
     }
-
-    $message = $resetattempts
-        ? 'Assessment updated. Previous student attempts were reset.'
-        : 'Assessment updated.';
 }
 
 if ($action === 'generate') {
@@ -569,7 +563,6 @@ if ($action === 'generate') {
 
     if ($type === 'pre') {
         // Initial diagnostic quiz: generated WITHOUT teacher materials and WITHOUT RAG.
-        // This is enforced server-side, even if hidden material fields are submitted by the browser.
         $sourcemode = 'manual';
         $selectedmaterialids = [];
     } else {
@@ -604,7 +597,7 @@ if ($action === 'generate') {
 
         if ($error === '') {
             $recordmaterialids = array_values(array_map(static function($material): int {
-                return (int) $material->id;
+                return (int)$material->id;
             }, $selectedmaterials));
 
             $totalchunks = $embeddingservice->count_indexed_chunks($courseid);
@@ -702,6 +695,7 @@ if ($action === 'edit') {
     $id = required_param('id', PARAM_INT);
     $editassessment = $DB->get_record('local_aiskillnav_assessment', ['id' => $id, 'courseid' => $courseid], '*', MUST_EXIST);
     $editquiz = json_decode((string)$editassessment->quizjson, true);
+    $attemptcount = $DB->count_records('local_aiskillnav_ass_att', ['assessmentid' => $editassessment->id]);
 
     if (!is_array($editquiz) || empty($editquiz['questions']) || !is_array($editquiz['questions'])) {
         echo html_writer::div('This assessment cannot be edited because its JSON structure is invalid.', 'alert alert-danger');
@@ -719,7 +713,7 @@ if ($action === 'edit') {
         exit;
     }
 
-    local_aiskillnavigator_assessment_render_edit_form($editassessment, $editquiz, $courseid);
+    local_aiskillnavigator_assessment_render_edit_form($editassessment, $editquiz, $courseid, $attemptcount);
 
     echo html_writer::end_div();
     echo local_aisn_back_to_course_autofix((int)$courseid);
