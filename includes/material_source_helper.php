@@ -149,6 +149,41 @@ function local_aiskillnavigator_material_source_duplicate_key(stdClass $material
     return '';
 }
 
+if (!function_exists('local_aiskillnavigator_material_source_clean_title')) {
+    function local_aiskillnavigator_material_source_clean_title(stdClass $material): string {
+        if (function_exists('local_aiskillnavigator_material_source_clean_course_title')) {
+            $title = local_aiskillnavigator_material_source_clean_course_title((string)($material->title ?? 'Course material'));
+        } else {
+            $title = (string)($material->title ?? 'Course material');
+            $title = preg_replace('/^\[Course #[0-9]+ \/ cm #[0-9]+\]\s*/u', '', $title);
+            $title = preg_replace('/^\[Prompt-to-Moodle\]\s*/iu', '', $title);
+            $title = preg_replace('/^\[Section\s+[0-9]+\]\s*/iu', '', $title);
+            $title = preg_replace('/^Materiale\s*-\s*/iu', '', $title);
+            $title = preg_replace('/^File\s*[:\-]?\s*/iu', '', $title);
+            $title = preg_replace('/\s+/u', ' ', trim((string)$title));
+        }
+
+        return trim((string)$title) !== '' ? trim((string)$title) : 'Course material';
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_material_source_normalize_title_for_dedupe')) {
+    function local_aiskillnavigator_material_source_normalize_title_for_dedupe(string $title): string {
+        if (function_exists('local_aiskillnavigator_material_source_clean_course_title')) {
+            return local_aiskillnavigator_material_source_clean_course_title($title);
+        }
+
+        $title = preg_replace('/^\[Course #[0-9]+ \/ cm #[0-9]+\]\s*/u', '', trim($title));
+        $title = preg_replace('/^\[Prompt-to-Moodle\]\s*/iu', '', $title);
+        $title = preg_replace('/^\[Section\s+[0-9]+\]\s*/iu', '', $title);
+        $title = preg_replace('/^Materiale\s*-\s*/iu', '', $title);
+        $title = preg_replace('/^File\s*[:\-]?\s*/iu', '', $title);
+        $title = preg_replace('/\s+/u', ' ', $title);
+
+        return trim((string)$title);
+    }
+}
+
 function local_aiskillnavigator_material_source_get_readable_materials(int $courseid, bool $includeall = true): array {
     global $DB, $CFG;
 
