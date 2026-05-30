@@ -11,6 +11,8 @@
         <FIELD NAME="content" TYPE="text" NOTNULL="true"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="externalaiallowed" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether this material can be sent to external AI providers"/>
+        <FIELD NAME="aipolicy" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="AI usage policy snapshot for this material"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>

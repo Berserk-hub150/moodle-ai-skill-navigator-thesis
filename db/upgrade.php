@@ -173,5 +173,22 @@ function xmldb_local_aiskillnavigator_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026053001, 'local', 'aiskillnavigator');
     }
 
+
+    if ($oldversion < 2026053002) {
+        $table = new xmldb_table('local_aiskillnav_material');
+
+        $field = new xmldb_field('externalaiallowed', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'timemodified');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('aipolicy', XMLDB_TYPE_TEXT, null, null, null, null, null, 'externalaiallowed');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_plugin_savepoint(true, 2026053002, 'local', 'aiskillnavigator');
+    }
+
     return true;
 }

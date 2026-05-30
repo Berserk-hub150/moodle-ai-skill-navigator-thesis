@@ -158,6 +158,8 @@ function local_aisn_tm_delete_material(stdClass $material): void {
 }
 
 if ($action !== '' && $materialid > 0) {
+    require_sesskey();
+
     $material = local_aisn_tm_get_material($materialid, $courseid);
 
     if ($action === 'allow') {
