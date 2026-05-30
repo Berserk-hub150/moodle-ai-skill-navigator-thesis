@@ -590,6 +590,13 @@ function local_aiskillnavigator_material_source_selector_html(
 
     if (form) {
         form.addEventListener("submit", function(event) {
+            const assessmentType = form.querySelector("[name=\"assessmenttype\"]");
+            const aisnSkipMaterialValidationForPretest = assessmentType && String(assessmentType.value || "") === "pre";
+
+            if (aisnSkipMaterialValidationForPretest || root.offsetParent === null) {
+                return;
+            }
+
             const selected = boxes.some(function(box) { return box.checked; });
 
             if (!selected) {

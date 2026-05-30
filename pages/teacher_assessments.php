@@ -200,6 +200,7 @@ function local_aiskillnavigator_assessment_build_prompt(
     $prompt .= "      \"options\": [\"...\", \"...\", \"...\", \"...\"],\n";
     $prompt .= "      \"correct_index\": 0,\n";
     $prompt .= "      \"skill\": \"...\",\n";
+    $prompt .= "      \"ability\": \"...\",\n";
     $prompt .= "      \"explanation\": \"...\"\n";
     $prompt .= "    }\n";
     $prompt .= "  ]\n";
@@ -568,7 +569,7 @@ if ($action === 'generate') {
 
     if ($type === 'pre') {
         // Initial diagnostic quiz: generated WITHOUT teacher materials and WITHOUT RAG.
-        // Even if the browser submits material selector fields, the server ignores them.
+        // This is enforced server-side, even if hidden material fields are submitted by the browser.
         $sourcemode = 'manual';
         $selectedmaterialids = [];
     } else {
