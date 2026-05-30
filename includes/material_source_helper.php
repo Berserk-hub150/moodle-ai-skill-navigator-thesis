@@ -270,7 +270,11 @@ function local_aisn_matlist_better(stdClass $current, stdClass $candidate): stdC
     return ((int)($candidate->id ?? 0) < (int)($current->id ?? 0)) ? $candidate : $current;
 }
 
-function local_aisn_matlist_dedupe(array $materials): array {
+function local_aisn_matlist_dedupe($materials): array {
+    if (!is_array($materials)) {
+        return [];
+    }
+
     $deduped = [];
     $keytoid = [];
 
@@ -597,9 +601,13 @@ function local_aiskillnavigator_material_source_selector_html(
     string $label = 'Course material',
     string $help = ''
 ): string {
+    if ($materials === null) {
+        $materials = local_aiskillnavigator_material_source_get_readable_materials($courseid);
+    }
+
     $materials = local_aisn_matlist_dedupe($materials);
 
-    $sourcemode = 'selected';
+$sourcemode = 'selected';
 
     $allowedcount = 0;
 
