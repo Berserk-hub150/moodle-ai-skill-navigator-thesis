@@ -210,74 +210,79 @@ if (!function_exists('local_aiskillnavigator_collect_course_resource_documents')
 
 if (!function_exists('local_aiskillnavigator_course_resource_document_is_prompt_generated')) {
     function local_aiskillnavigator_course_resource_document_is_prompt_generated(array $doc): bool {
-        $title = strtolower((string)($doc['title'] ?? ''));
-        return str_contains($title, 'prompt-to-moodle');
-    }
+    $title = strtolower((string)($doc['title'] ?? ''));
+
+    return str_contains($title, 'prompt-to-moodle')
+        || str_contains($title, 'prompt to moodle');
+}
 }
 
 if (!function_exists('local_aiskillnavigator_course_resource_normalize_filename_key')) {
     function local_aiskillnavigator_course_resource_normalize_filename_key(string $filename): string {
-        $filename = str_replace('\\', '/', trim($filename));
-        $filename = basename($filename);
-        $filename = strtolower($filename);
-        $filename = preg_replace('/\s+/u', ' ', $filename);
-        return trim((string)$filename);
-    }
+    $filename = str_replace('\\', '/', trim($filename));
+    $filename = basename($filename);
+    $filename = strtolower($filename);
+    $filename = preg_replace('/\s+/u', ' ', $filename);
+
+    return trim((string)$filename);
+}
 }
 
 if (!function_exists('local_aiskillnavigator_course_resource_document_duplicate_key')) {
     function local_aiskillnavigator_course_resource_document_duplicate_key(array $doc): string {
-        $title = (string)($doc['title'] ?? '');
-        $content = (string)($doc['content'] ?? '');
+    $title = (string)($doc['title'] ?? '');
+    $content = (string)($doc['content'] ?? '');
 
-        if (preg_match('/^\s*File:\s*([^\r\n]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx))\b/iu', $content, $matches)) {
-            return 'file:' . local_aiskillnavigator_course_resource_normalize_filename_key($matches[1]);
-        }
+    $filename = local_aiskillnavigator_course_resource_extract_filename($title, $content);
+    $body = local_aiskillnavigator_course_resource_normalize_content_for_dedupe($content);
 
-        if (preg_match('/([^\[\]\r\n\/\\\\]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx))\b/iu', $title, $matches)) {
-            return 'file:' . local_aiskillnavigator_course_resource_normalize_filename_key($matches[1]);
-        }
-
-        $normalized = strtolower((string)preg_replace('/\s+/u', ' ', trim($content)));
-        if (strlen($normalized) < 120) {
-            return '';
-        }
-
-        return 'content:' . sha1(substr($normalized, 0, 8000));
+    if ($filename !== '' && strlen($body) >= 60) {
+        return 'filebody:' . $filename . ':' . sha1(substr($body, 0, 12000));
     }
+
+    if (strlen($body) >= 120) {
+        return 'body:' . sha1(substr($body, 0, 12000));
+    }
+
+    if ($filename !== '') {
+        return 'file:' . $filename;
+    }
+
+    return '';
+}
 }
 
 if (!function_exists('local_aiskillnavigator_dedupe_course_resource_documents')) {
     function local_aiskillnavigator_dedupe_course_resource_documents(array $documents): array {
-        $deduped = [];
-        $seen = [];
+    $deduped = [];
+    $seen = [];
 
-        foreach ($documents as $doc) {
-            $key = local_aiskillnavigator_course_resource_document_duplicate_key($doc);
+    foreach ($documents as $doc) {
+        $key = local_aiskillnavigator_course_resource_document_duplicate_key($doc);
 
-            if ($key === '') {
-                $deduped[] = $doc;
-                continue;
-            }
-
-            if (!isset($seen[$key])) {
-                $seen[$key] = count($deduped);
-                $deduped[] = $doc;
-                continue;
-            }
-
-            $existingindex = $seen[$key];
-            $existing = $deduped[$existingindex] ?? null;
-            $existingprompt = is_array($existing) && local_aiskillnavigator_course_resource_document_is_prompt_generated($existing);
-            $currentprompt = local_aiskillnavigator_course_resource_document_is_prompt_generated($doc);
-
-            if ($existingprompt && !$currentprompt) {
-                $deduped[$existingindex] = $doc;
-            }
+        if ($key === '') {
+            $deduped[] = $doc;
+            continue;
         }
 
-        return array_values($deduped);
+        if (!isset($seen[$key])) {
+            $seen[$key] = count($deduped);
+            $deduped[] = $doc;
+            continue;
+        }
+
+        $existingindex = $seen[$key];
+        $existing = $deduped[$existingindex] ?? null;
+        $existingprompt = is_array($existing) && local_aiskillnavigator_course_resource_document_is_prompt_generated($existing);
+        $currentprompt = local_aiskillnavigator_course_resource_document_is_prompt_generated($doc);
+
+        if ($existingprompt && !$currentprompt) {
+            $deduped[$existingindex] = $doc;
+        }
     }
+
+    return array_values($deduped);
+}
 }
 
 if (!function_exists('local_aiskillnavigator_extract_files_from_area')) {
@@ -447,6 +452,42 @@ if (!function_exists('local_aiskillnavigator_limit_material_text')) {
 
         return trim($text);
     }
+}
+
+function local_aiskillnavigator_course_resource_normalize_title_for_dedupe(string $title): string {
+    $title = trim($title);
+    $title = preg_replace('/^\[Course #[0-9]+ \/ cm #[0-9]+\]\s*/u', '', $title);
+    $title = preg_replace('/^\[Prompt-to-Moodle\]\s*/iu', '', $title);
+    $title = preg_replace('/^\[Section\s+[0-9]+\]\s*/iu', '', $title);
+    $title = preg_replace('/^Materiale\s*-\s*/iu', '', $title);
+    $title = preg_replace('/^File\s*[:\-]?\s*/iu', '', $title);
+    $title = preg_replace('/\s+/u', ' ', $title);
+
+    return trim((string)$title);
+}
+
+function local_aiskillnavigator_course_resource_extract_filename(string $title, string $content): string {
+    $cleantitle = local_aiskillnavigator_course_resource_normalize_title_for_dedupe($title);
+
+    if (preg_match('/([^\[\]\r\n\/\\\\]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx))\b/iu', $cleantitle, $matches)) {
+        return local_aiskillnavigator_course_resource_normalize_filename_key($matches[1]);
+    }
+
+    if (preg_match('/^\s*File\s*[:\-]?\s*([^\r\n]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx))\b/iu', $content, $matches)) {
+        return local_aiskillnavigator_course_resource_normalize_filename_key($matches[1]);
+    }
+
+    return '';
+}
+
+function local_aiskillnavigator_course_resource_normalize_content_for_dedupe(string $content): string {
+    $content = html_entity_decode($content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $content = preg_replace('/^\s*File\s*[:\-]?\s*[^\r\n]+\.(?:txt|md|csv|json|xml|html|htm|pdf|docx|pptx)\b[^\r\n]*[\r\n]*/iu', '', $content);
+    $content = preg_replace('/^\s*\[Prompt-to-Moodle\]\s*/iu', '', $content);
+    $content = preg_replace('/^\s*\[Section\s+[0-9]+\]\s*/iu', '', $content);
+    $content = preg_replace('/\s+/u', ' ', trim((string)$content));
+
+    return strtolower($content);
 }
 
 if (!function_exists('local_aiskillnavigator_try_index_synced_materials')) {
