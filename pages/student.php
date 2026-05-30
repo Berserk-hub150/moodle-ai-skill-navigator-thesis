@@ -322,4 +322,3 @@ echo local_aisn_back_to_course_autofix((int)($courseid ?? optional_param('course
 if (function_exists('local_aisn_ai_output_formatter_assets')) { echo local_aisn_ai_output_formatter_assets(); }
 echo $OUTPUT->footer();
 
-

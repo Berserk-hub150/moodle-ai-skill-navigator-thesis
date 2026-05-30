@@ -1,6 +1,7 @@
 <?php
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/simulator_materials_helper.php');
 require_once(__DIR__ . '/../includes/ai_output_formatter.php');
 require_once(__DIR__ . '/../includes/back_to_course_helper.php');
 require_once(__DIR__ . '/../includes/ui_style_helper.php');
@@ -9,6 +10,9 @@ require_once(__DIR__ . '/../classes/service/web_search_service.php');
 global $PAGE, $OUTPUT;
 
 $courseid = optional_param('courseid', optional_param('id', SITEID, PARAM_INT), PARAM_INT);
+
+local_aisn_sim_require_materials_for_post((int)$courseid);
+local_aisn_sim_prepare_capture((int)$courseid);
 $action = optional_param('action', '', PARAM_ALPHA);
 $topic = optional_param('topic', '', PARAM_TEXT);
 $level = optional_param('level', 'medium', PARAM_ALPHA);
@@ -323,8 +327,8 @@ if ($action === 'generate') {
         $prompt .= "2. Istruzioni\n";
         $prompt .= "3. Simulatore/tool consigliato\n";
         $prompt .= "4. Link/fonte\n";
-        $prompt .= "5. PerchÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© questo simulatore ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ adatto\n";
-        $prompt .= "6. Alternativa se nessun simulatore ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ disponibile\n";
+        $prompt .= "5. PerchÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© questo simulatore ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ adatto\n";
+        $prompt .= "6. Alternativa se nessun simulatore ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ disponibile\n";
         $prompt .= "7. Criteri di valutazione\n";
 
         $result = local_aiskillnavigator_sim_call_ai(
@@ -346,6 +350,12 @@ echo html_writer::tag(
     ['class' => 'lead']
 );
 echo html_writer::tag('p', 'Course: ' . s($course->fullname), ['class' => 'text-muted']);
+
+
+echo html_writer::div(
+    local_aisn_sim_saved_link_html((int)$courseid),
+    'mb-3'
+);
 
 if ($searchenabled) {
     echo html_writer::div(
@@ -373,6 +383,12 @@ echo html_writer::start_tag('form', [
 
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => 'generate']);
+
+echo html_writer::div(
+    local_aisn_sim_material_selector_html((int)$courseid),
+    'mb-3'
+);
+
 
 echo html_writer::tag('label', 'Topic', ['for' => 'topic']);
 echo html_writer::empty_tag('input', [
@@ -467,3 +483,5 @@ echo html_writer::end_div();
 echo local_aisn_back_to_course_autofix((int)($courseid ?? optional_param('courseid', optional_param('id', 0, PARAM_INT), PARAM_INT)));
 if (function_exists('local_aisn_ai_output_formatter_assets')) { echo local_aisn_ai_output_formatter_assets(); }
 echo $OUTPUT->footer();
+
+

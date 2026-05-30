@@ -109,7 +109,7 @@ function local_aiskillnavigator_gap_collect(int $courseid): array {
             }
 
             foreach ($questions as $index => $question) {
-                $skill = trim((string)($question['skill'] ?? 'General understanding'));
+                $skill = trim((string)($question['Ability'] ?? 'General understanding'));
 
                 if ($skill === '') {
                     $skill = 'General understanding';
@@ -175,7 +175,7 @@ if ($action === 'generate') {
     }
 
     $lines[] = '';
-    $lines[] = 'Skill-level results:';
+    $lines[] = 'Ability-level results:';
 
     foreach ($data['skills'] as $skill => $stats) {
         $rate = $stats['total'] > 0 ? round(($stats['correct'] / $stats['total']) * 100, 1) : 0;
@@ -208,7 +208,7 @@ echo html_writer::tag('h2', 'AI learning-gap analysis');
 
 echo html_writer::tag(
     'p',
-    'Analyze initial diagnostic quizzes and final tests to identify weak skills, class-level gaps and teacher-side remediation actions.',
+    'Analyze initial diagnostic quizzes and final tests to identify weak abilities, class-level ability gaps and teacher-side remediation actions.',
     ['class' => 'lead']
 );
 
@@ -233,7 +233,7 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('aisn-stat');
 echo html_writer::div((string)count($data['skills']), 'aisn-stat-value');
-echo html_writer::div('Detected skills', 'aisn-stat-label');
+echo html_writer::div('Detected abilities', 'aisn-stat-label');
 echo html_writer::end_div();
 
 echo html_writer::end_div();
@@ -246,7 +246,7 @@ if ((int)$data['totalattempts'] === 0) {
 
     echo html_writer::tag(
         'p',
-        'Generate and publish an initial diagnostic quiz or final test, then let students submit their answers. After that, this page will show skill gaps and AI recommendations.',
+        'Generate and publish an initial diagnostic quiz or final test, then let students submit their answers. After that, this page will show ability gaps and AI recommendations.',
         ['class' => 'text-muted']
     );
 
@@ -291,15 +291,15 @@ if ((int)$data['totalattempts'] === 0) {
     echo html_writer::start_div('card mb-4');
     echo html_writer::start_div('card-body');
 
-    echo html_writer::tag('h3', 'Weak skills');
+    echo html_writer::tag('h3', 'weak abilities');
 
     if (empty($data['skills'])) {
-        echo html_writer::div('No skill-level data available yet.', 'alert alert-info');
+        echo html_writer::div('No ability-level data available yet.', 'alert alert-info');
     } else {
         echo html_writer::start_tag('table', ['class' => 'table table-bordered']);
         echo html_writer::tag(
             'tr',
-            html_writer::tag('th', 'Skill') .
+            html_writer::tag('th', 'Ability') .
             html_writer::tag('th', 'Correct') .
             html_writer::tag('th', 'Wrong') .
             html_writer::tag('th', 'Correct %')
@@ -368,3 +368,5 @@ echo html_writer::end_div();
 echo local_aisn_back_to_course_autofix((int)($courseid ?? optional_param('courseid', optional_param('id', 0, PARAM_INT), PARAM_INT)));
 if (function_exists('local_aisn_ai_output_formatter_assets')) { echo local_aisn_ai_output_formatter_assets(); }
 echo $OUTPUT->footer();
+
+

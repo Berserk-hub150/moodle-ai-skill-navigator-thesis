@@ -30,7 +30,7 @@ function local_aiskillnavigator_adaptive_call_ai(string $prompt): string {
             return $provider->generate(
                 $prompt,
                 2600,
-                'You are an adaptive Moodle tutor. Generate remedial explanations and practice questions based on weak skills. Do not invent private data.'
+                'You are an adaptive Moodle tutor. Generate remedial explanations and practice questions based on weak abilities. Do not invent private data.'
             );
         }
     } catch (Throwable $e) {
@@ -65,7 +65,7 @@ echo html_writer::tag('h2', 'Adaptive review');
 
 echo html_writer::tag(
     'p',
-    'This page estimates the student weak skills from previous quiz/test answers and generates targeted recovery practice.',
+    'This page estimates the student weak abilities from previous quiz/test answers and generates targeted recovery practice.',
     ['class' => 'lead']
 );
 
@@ -75,19 +75,19 @@ if (empty($profile['skills'])) {
     echo html_writer::start_div('card mb-4');
     echo html_writer::start_div('card-body');
     echo html_writer::tag('h3', 'No learning data yet');
-    echo html_writer::tag('p', 'Complete at least one AI quiz or initial/final test. Then this page will build a personalized weak-skill profile.', ['class' => 'text-muted']);
+    echo html_writer::tag('p', 'Complete at least one AI quiz or initial/final test. Then this page will build a personalized weak-ability profile.', ['class' => 'text-muted']);
     echo html_writer::end_div();
     echo html_writer::end_div();
 } else {
     echo html_writer::start_div('card mb-4');
     echo html_writer::start_div('card-body');
 
-    echo html_writer::tag('h3', 'Detected weak skills');
+    echo html_writer::tag('h3', 'Detected weak abilities');
 
     echo html_writer::start_tag('table', ['class' => 'table table-striped']);
     echo html_writer::tag(
         'tr',
-        html_writer::tag('th', 'Skill') .
+        html_writer::tag('th', 'Ability') .
         html_writer::tag('th', 'Correct') .
         html_writer::tag('th', 'Wrong') .
         html_writer::tag('th', 'Estimated mastery')
@@ -96,7 +96,7 @@ if (empty($profile['skills'])) {
     foreach ($profile['skills'] as $skill) {
         echo html_writer::tag(
             'tr',
-            html_writer::tag('td', s($skill['skill'])) .
+            html_writer::tag('td', s($skill['Ability'])) .
             html_writer::tag('td', (int)$skill['correct']) .
             html_writer::tag('td', (int)$skill['wrong']) .
             html_writer::tag('td', s($skill['mastery'] . '%'))
@@ -147,3 +147,5 @@ echo html_writer::end_div();
 echo local_aisn_back_to_course_autofix((int)($courseid ?? optional_param('courseid', optional_param('id', 0, PARAM_INT), PARAM_INT)));
 if (function_exists('local_aisn_ai_output_formatter_assets')) { echo local_aisn_ai_output_formatter_assets(); }
 echo $OUTPUT->footer();
+
+

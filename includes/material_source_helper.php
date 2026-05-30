@@ -62,52 +62,87 @@ if (!function_exists('local_aiskillnavigator_ai_policy_badge_class')) {
 }
 
 function local_aiskillnavigator_material_source_mode_from_request(int $defaultmaterialid = -1): string {
-    $mode = optional_param('sourcemode', '', PARAM_ALPHA);
-
-    if ($mode === '') {
-        $mode = optional_param('source_mode', '', PARAM_ALPHA);
-    }
-
-    if ($mode === '') {
-        $legacy = optional_param('materialid', $defaultmaterialid, PARAM_INT);
-
-        if ($legacy === 0) {
-            $mode = 'all';
-        } else if ($legacy > 0) {
-            $mode = 'selected';
-        } else {
-            $mode = 'manual';
-        }
-    }
-
-    return in_array($mode, ['manual', 'all', 'selected'], true) ? $mode : 'manual';
+    // The plugin is now material-grounded by default.
+    // Free "question/topic only" mode is intentionally disabled.
+    return 'selected';
 }
 
+
 function local_aiskillnavigator_material_source_get_readable_materials(int $courseid, bool $includeall = true): array {
-    global $DB;
+    global $DB, $CFG;
 
     if (!$DB->get_manager()->table_exists(new xmldb_table('local_aiskillnav_material'))) {
         return [];
     }
 
+    $syncfile = $CFG->dirroot . '/local/aiskillnavigator/includes/course_resource_sync.php';
+
+    if (file_exists($syncfile)) {
+        require_once($syncfile);
+
+        if (function_exists('local_aiskillnavigator_sync_course_resources')) {
+            local_aiskillnavigator_sync_course_resources($courseid, 0, false);
+        }
+    }
+
     $records = $DB->get_records(
         'local_aiskillnav_material',
-        ['courseid' => $courseid],
-        'timemodified DESC, timecreated DESC'
+        [
+            'courseid' => $courseid,
+            'materialtype' => 'course_resource',
+        ],
+        'title ASC'
     );
 
+    if (empty($records)) {
+        return [];
+    }
+
+    $modinfo = get_fast_modinfo($courseid);
     $readable = [];
+    $order = [];
 
     foreach ($records as $record) {
         if (trim((string)($record->content ?? '')) === '') {
             continue;
         }
 
+        $title = (string)($record->title ?? '');
+
+        if (!preg_match('/^\[Course #([0-9]+) \/ cm #([0-9]+)\]/', $title, $matches)) {
+            continue;
+        }
+
+        $recordcourseid = (int)$matches[1];
+        $cmid = (int)$matches[2];
+
+        if ($recordcourseid !== $courseid || $cmid <= 0) {
+            continue;
+        }
+
+        if (empty($modinfo->cms[$cmid])) {
+            continue;
+        }
+
+        $cm = $modinfo->cms[$cmid];
+
+        if (empty($cm->visible)) {
+            continue;
+        }
+
         $readable[(int)$record->id] = $record;
+        $order[(int)$record->id] = (int)$cmid;
     }
+
+    uasort($readable, function($a, $b) use ($order) {
+        $aid = (int)$a->id;
+        $bid = (int)$b->id;
+        return ($order[$aid] ?? 999999) <=> ($order[$bid] ?? 999999);
+    });
 
     return $readable;
 }
+
 
 function local_aiskillnavigator_material_source_selected_ids_from_request(array $readablematerials): array {
     $ids = optional_param_array('materialids', [], PARAM_INT);
@@ -292,167 +327,280 @@ function local_aiskillnavigator_material_source_selector_html(
     int $courseid,
     string $sourcemode,
     array $selectedmaterialids,
-    string $label = 'Source',
+    string $label = 'Course material',
     string $help = ''
 ): string {
-    $sourcemode = in_array($sourcemode, ['manual', 'all', 'selected'], true) ? $sourcemode : 'manual';
+    $sourcemode = 'selected';
 
-    if ($sourcemode === 'all') {
-        $sourcemode = 'selected';
+    $allowedcount = 0;
+
+    foreach ($readablematerials as $material) {
+        if (local_aiskillnavigator_material_can_be_sent_to_current_ai($material)) {
+            $allowedcount++;
+        }
     }
 
     $html = '';
 
     $html .= html_writer::tag('style', '
-.aisn-material.is-disabled {
-    opacity: .62;
-    cursor: not-allowed;
+.aisn-material-selector {
+    border: 1px solid #d9e2ec;
+    border-radius: 18px;
+    padding: 22px;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
+}
+.aisn-material-selector-title {
+    font-size: 1.12rem;
+    font-weight: 900;
+    margin-bottom: 8px;
+}
+.aisn-material-selector-help {
+    color: #52616b;
+    margin-bottom: 14px;
+}
+.aisn-material-dropdown {
+    border: 1px solid #cbd5e1;
+    border-radius: 14px;
+    overflow: hidden;
     background: #f8fafc;
 }
-.aisn-material.is-disabled:hover {
-    transform: none;
-    border-color: #e5e7eb;
-    box-shadow: none;
+.aisn-material-dropdown > summary {
+    cursor: pointer;
+    padding: 13px 15px;
+    font-weight: 850;
+    background: #eff6ff;
+    list-style: none;
+}
+.aisn-material-dropdown > summary::-webkit-details-marker {
+    display: none;
+}
+.aisn-material-search {
+    width: calc(100% - 24px);
+    margin: 12px;
+    padding: 11px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 11px;
+}
+.aisn-material-list {
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 0 12px 12px;
+}
+.aisn-material {
+    display: block;
+    margin: 8px 0;
+    padding: 12px;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    background: #ffffff;
+}
+.aisn-material:hover {
+    border-color: #60a5fa;
+    background: #f8fbff;
+}
+.aisn-material.is-disabled {
+    opacity: .60;
+    cursor: not-allowed;
+    background: #f3f4f6;
+}
+.aisn-material-title {
+    font-weight: 850;
+    margin-left: 7px;
+}
+.aisn-badge {
+    display: inline-block;
+    margin-top: 7px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 750;
 }
 .aisn-material-note {
     display: block;
     margin-top: 8px;
     color: #92400e;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 750;
+}
+.aisn-excerpt {
+    color: #64748b;
+    font-size: 13px;
+    margin-top: 8px;
+}
+.aisn-empty {
+    padding: 14px;
+    border-radius: 12px;
+    background: #fff3cd;
+    border: 1px solid #ffec99;
+    color: #664d03;
+    font-weight: 750;
 }
 ');
 
-    $html .= html_writer::start_div('aisn-source-box');
+    $html .= html_writer::start_div('aisn-material-selector');
 
-    $html .= html_writer::tag('label', s($label), ['class' => 'font-weight-bold']);
-
-    $html .= html_writer::start_div('aisn-choice-row');
-
-    $html .= html_writer::start_tag('label', ['class' => 'aisn-choice']);
     $html .= html_writer::empty_tag('input', [
-        'type' => 'radio',
-        'name' => 'sourcemode',
-        'value' => 'manual',
-        'checked' => $sourcemode === 'manual' ? 'checked' : null,
-    ]);
-    $html .= html_writer::span('Question/topic only', 'aisn-choice-title');
-    $html .= html_writer::span('Use 0 course materials.', 'aisn-choice-text');
-    $html .= html_writer::end_tag('label');
-
-    $html .= html_writer::start_tag('label', ['class' => 'aisn-choice']);
-    $html .= html_writer::empty_tag('input', [
-        'type' => 'radio',
+        'type' => 'hidden',
         'name' => 'sourcemode',
         'value' => 'selected',
-        'checked' => $sourcemode === 'selected' ? 'checked' : null,
     ]);
-    $html .= html_writer::span('Use course materials', 'aisn-choice-title');
-    $html .= html_writer::span('Choose one or more allowed materials below.', 'aisn-choice-text');
-    $html .= html_writer::end_tag('label');
 
-    $html .= html_writer::end_div();
+    $html .= html_writer::empty_tag('input', [
+        'type' => 'hidden',
+        'name' => 'source_mode',
+        'value' => 'selected',
+    ]);
 
-    $panelclass = $sourcemode === 'manual' ? 'aisn-material-panel aisn-hidden' : 'aisn-material-panel';
+    $html .= html_writer::tag('div', '1. Course material', ['class' => 'aisn-material-selector-title']);
 
-    $html .= html_writer::start_div($panelclass, ['data-aisn-material-panel' => '1']);
+    $html .= html_writer::tag(
+        'div',
+        'Select at least one course material. The AI answer will be grounded only on the selected material.',
+        ['class' => 'aisn-material-selector-help']
+    );
 
-    if (empty($readablematerials)) {
+    if (empty($readablematerials) || $allowedcount === 0) {
         $html .= html_writer::div(
-            'No course materials found yet. Add a Moodle File, Page, Label, Folder, URL or Book resource to this course.',
+            'No selectable course materials found. Add material in Course materials / RAG before using this tool.',
             'aisn-empty'
         );
-    } else {
-        $html .= html_writer::tag('p', 'Select one or more course materials.', ['class' => 'aisn-muted']);
-        $html .= html_writer::start_div('aisn-material-grid');
-
-        foreach ($readablematerials as $material) {
-            $id = (int)$material->id;
-            $allowed = local_aiskillnavigator_material_can_be_sent_to_current_ai($material);
-            $checked = $allowed && in_array($id, $selectedmaterialids, true) && $sourcemode === 'selected';
-
-            $class = $allowed ? 'aisn-material' : 'aisn-material is-disabled';
-
-            $html .= html_writer::start_tag('label', ['class' => $class]);
-
-            $inputattrs = [
-                'type' => 'checkbox',
-                'name' => 'materialids[]',
-                'value' => $id,
-                'checked' => $checked ? 'checked' : null,
-            ];
-
-            if (!$allowed) {
-                $inputattrs['disabled'] = 'disabled';
-            }
-
-            $html .= html_writer::empty_tag('input', $inputattrs);
-
-            $html .= html_writer::span(s(local_aiskillnavigator_material_source_clean_title($material)), 'aisn-material-title');
-            $html .= html_writer::empty_tag('br');
-            $html .= html_writer::span(strlen((string)$material->content) . ' chars', 'aisn-badge');
-            $html .= ' ';
-            $html .= html_writer::span(s(local_aiskillnavigator_ai_policy_label($material)), local_aiskillnavigator_ai_policy_badge_class($material));
-
-            if (!$allowed) {
-                $html .= html_writer::span('Not selectable with the current external provider.', 'aisn-material-note');
-            }
-
-            $html .= html_writer::div(
-                s(local_aiskillnavigator_material_source_excerpt((string)$material->content)),
-                'aisn-excerpt'
-            );
-
-            $html .= html_writer::end_tag('label');
-        }
 
         $html .= html_writer::end_div();
+
+        return $html;
+    }
+
+    $summarytext = empty($selectedmaterialids)
+        ? 'Open course material menu'
+        : count($selectedmaterialids) . ' material(s) selected';
+
+    $html .= html_writer::start_tag('details', [
+        'class' => 'aisn-material-dropdown',
+        'open' => 'open',
+        'data-aisn-material-dropdown' => '1',
+    ]);
+
+    $html .= html_writer::tag('summary', s($summarytext), [
+        'data-aisn-material-summary' => '1',
+    ]);
+
+    $html .= html_writer::empty_tag('input', [
+        'type' => 'search',
+        'class' => 'aisn-material-search',
+        'placeholder' => 'Search course material...',
+        'data-aisn-material-search' => '1',
+    ]);
+
+    $html .= html_writer::start_div('aisn-material-list', [
+        'data-aisn-material-list' => '1',
+    ]);
+
+    foreach ($readablematerials as $material) {
+        $id = (int)$material->id;
+        $allowed = local_aiskillnavigator_material_can_be_sent_to_current_ai($material);
+
+        $checked = $allowed && in_array($id, $selectedmaterialids, true);
+        $class = $allowed ? 'aisn-material' : 'aisn-material is-disabled';
+
+        $title = local_aiskillnavigator_material_source_clean_title($material);
+        $searchtext = strtolower($title . ' ' . (string)($material->content ?? ''));
+
+        $html .= html_writer::start_tag('label', [
+            'class' => $class,
+            'data-aisn-material-row' => '1',
+            'data-search' => s($searchtext),
+        ]);
+
+        $inputattrs = [
+            'type' => 'checkbox',
+            'name' => 'materialids[]',
+            'value' => $id,
+            'checked' => $checked ? 'checked' : null,
+            'data-aisn-material-checkbox' => '1',
+        ];
+
+        if (!$allowed) {
+            $inputattrs['disabled'] = 'disabled';
+        }
+
+        $html .= html_writer::empty_tag('input', $inputattrs);
+        $html .= html_writer::span(s($title), 'aisn-material-title');
+
+        $html .= html_writer::empty_tag('br');
+        $html .= html_writer::span(strlen((string)$material->content) . ' chars', 'aisn-badge');
+        $html .= ' ';
+        $html .= html_writer::span(
+            s(local_aiskillnavigator_ai_policy_label($material)),
+            local_aiskillnavigator_ai_policy_badge_class($material)
+        );
+
+        if (!$allowed) {
+            $html .= html_writer::span(
+                'Not selectable with the current external provider.',
+                'aisn-material-note'
+            );
+        }
+
+        $html .= html_writer::div(
+            s(local_aiskillnavigator_material_source_excerpt((string)$material->content)),
+            'aisn-excerpt'
+        );
+
+        $html .= html_writer::end_tag('label');
     }
 
     $html .= html_writer::end_div();
+    $html .= html_writer::end_tag('details');
 
     $html .= html_writer::tag('script', '
 (function() {
-    const radios = document.querySelectorAll("input[name=\"sourcemode\"], input[name=\"source_mode\"]");
-    const panels = document.querySelectorAll("[data-aisn-material-panel=\"1\"], #materials-panel");
+    const root = document.currentScript.closest(".aisn-material-selector");
+    if (!root) { return; }
 
-    function refresh() {
-        const selected = document.querySelector("input[name=\"sourcemode\"]:checked") ||
-                         document.querySelector("input[name=\"source_mode\"]:checked");
+    const form = root.closest("form");
+    const search = root.querySelector("[data-aisn-material-search]");
+    const summary = root.querySelector("[data-aisn-material-summary]");
+    const rows = Array.from(root.querySelectorAll("[data-aisn-material-row]"));
+    const boxes = Array.from(root.querySelectorAll("[data-aisn-material-checkbox]:not(:disabled)"));
 
-        panels.forEach(function(panel) {
-            const boxes = panel.querySelectorAll("input[type=\"checkbox\"]");
+    function refreshSummary() {
+        const selected = boxes.filter(function(box) { return box.checked; }).length;
+        summary.textContent = selected > 0
+            ? selected + " material(s) selected"
+            : "Open course material menu";
+    }
 
-            if (!selected || selected.value === "manual") {
-                panel.classList.add("aisn-hidden");
-                boxes.forEach(function(box) {
-                    box.checked = false;
-                    if (!box.dataset.forceDisabled) {
-                        box.disabled = true;
-                    }
-                });
-            } else {
-                panel.classList.remove("aisn-hidden");
-                boxes.forEach(function(box) {
-                    if (!box.dataset.forceDisabled) {
-                        box.disabled = false;
-                    }
-                });
-            }
+    if (search) {
+        search.addEventListener("input", function() {
+            const q = String(search.value || "").toLowerCase().trim();
+
+            rows.forEach(function(row) {
+                const haystack = String(row.dataset.search || row.textContent || "").toLowerCase();
+                row.style.display = haystack.indexOf(q) !== -1 ? "" : "none";
+            });
         });
     }
 
-    document.querySelectorAll(".aisn-material.is-disabled input[type=\"checkbox\"]").forEach(function(box) {
-        box.dataset.forceDisabled = "1";
-        box.disabled = true;
-        box.checked = false;
+    boxes.forEach(function(box) {
+        box.addEventListener("change", refreshSummary);
     });
 
-    radios.forEach(function(radio) {
-        radio.addEventListener("change", refresh);
-    });
+    if (form) {
+        form.addEventListener("submit", function(event) {
+            const selected = boxes.some(function(box) { return box.checked; });
 
-    refresh();
+            if (!selected) {
+                event.preventDefault();
+                event.stopPropagation();
+                alert("Select at least one course material. The AI cannot answer without selected course material.");
+            }
+        }, true);
+    }
+
+    refreshSummary();
 })();
 ');
 
@@ -460,6 +608,7 @@ function local_aiskillnavigator_material_source_selector_html(
 
     return $html;
 }
+
 
 function local_aiskillnavigator_material_source_render_controls(
     array $readablematerials,

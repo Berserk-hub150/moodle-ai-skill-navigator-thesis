@@ -2,6 +2,21 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+require_once(__DIR__ . '/pdf_text_extractor.php');
+
+if (!function_exists('local_aiskillnavigator_course_module_external_ai_allowed')) {
+    function local_aiskillnavigator_course_module_external_ai_allowed(int $cmid): int {
+        if ($cmid <= 0) {
+            return 0;
+        }
+
+        $stored = get_config('local_aiskillnavigator', 'cm_external_ai_' . $cmid);
+
+        return ((string)$stored === '1') ? 1 : 0;
+    }
+}
+
+
 if (!function_exists('local_aiskillnavigator_sync_course_resources')) {
     function local_aiskillnavigator_sync_course_resources(int $courseid, int $userid = 0, bool $force = false): array {
         global $DB, $USER;
@@ -47,7 +62,17 @@ if (!function_exists('local_aiskillnavigator_sync_course_resources')) {
             ]);
 
             if ($existing) {
-                if ((string) $existing->content !== $content || $force) {
+                $cmexternalallowed = local_aiskillnavigator_course_module_external_ai_allowed((int)$doc['cmid']);
+                $policychanged = false;
+
+                if ((int)($existing->externalaiallowed ?? 0) !== $cmexternalallowed ||
+                    (string)($existing->aipolicy ?? '') !== ($cmexternalallowed ? 'external_allowed' : 'local_only')) {
+                    $existing->externalaiallowed = $cmexternalallowed;
+                    $existing->aipolicy = $cmexternalallowed ? 'external_allowed' : 'local_only';
+                    $policychanged = true;
+                }
+
+                if ((string) $existing->content !== $content || $force || $policychanged) {
                     $existing->userid = $userid;
                     $existing->content = $content;
                     $existing->timemodified = time();
@@ -68,6 +93,11 @@ if (!function_exists('local_aiskillnavigator_sync_course_resources')) {
             $record->title = $sourcetitle;
             $record->materialtype = 'course_resource';
             $record->content = $content;
+
+            $cmexternalallowed = local_aiskillnavigator_course_module_external_ai_allowed((int)$doc['cmid']);
+            $record->externalaiallowed = $cmexternalallowed;
+            $record->aipolicy = $cmexternalallowed ? 'external_allowed' : 'local_only';
+
             $record->timecreated = time();
             $record->timemodified = time();
 
@@ -308,22 +338,21 @@ if (!function_exists('local_aiskillnavigator_extract_pptx_text')) {
 
 if (!function_exists('local_aiskillnavigator_extract_pdf_text_if_possible')) {
     function local_aiskillnavigator_extract_pdf_text_if_possible(stored_file $file): string {
-        $pdftotext = trim((string) @shell_exec('command -v pdftotext 2>/dev/null'));
-
-        if ($pdftotext === '') {
-            return '[PDF file detected: automatic text extraction requires pdftotext on the server. Filename: ' . $file->get_filename() . ']';
-        }
-
         $tmpdir = make_temp_directory('local_aiskillnavigator/course_import');
         $tmppath = $tmpdir . '/' . uniqid('pdf_', true) . '.pdf';
+
         $file->copy_content_to($tmppath);
 
-        $command = escapeshellcmd($pdftotext) . ' -layout ' . escapeshellarg($tmppath) . ' - 2>/dev/null';
-        $text = (string) @shell_exec($command);
+        try {
+            $text = local_aiskillnavigator_extract_pdf_text_from_path($tmppath, $file->get_filename());
+        } catch (Throwable $e) {
+            debugging('PDF extraction failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            $text = '';
+        }
 
         @unlink($tmppath);
 
-        return trim($text);
+        return trim((string)$text);
     }
 }
 

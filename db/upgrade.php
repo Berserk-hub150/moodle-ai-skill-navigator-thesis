@@ -138,5 +138,40 @@ function xmldb_local_aiskillnavigator_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026051921, 'local', 'aiskillnavigator');
     }
 
+
+    if ($oldversion < 2026053001) {
+        $table = new xmldb_table('local_aiskillnav_material');
+
+        $field = new xmldb_field('externalaiallowed', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'timemodified');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('aipolicy', XMLDB_TYPE_TEXT, null, null, null, null, null, 'externalaiallowed');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $simtable = new xmldb_table('local_aiskillnav_sim');
+        if (!$dbman->table_exists($simtable)) {
+            $simtable->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $simtable->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $simtable->add_field('materialid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+            $simtable->add_field('title', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+            $simtable->add_field('url', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
+            $simtable->add_field('description', XMLDB_TYPE_TEXT, null, null, null, null, null);
+            $simtable->add_field('source', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, 'manual');
+            $simtable->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $simtable->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $simtable->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $simtable->add_key('coursefk', XMLDB_KEY_FOREIGN, ['courseid'], 'course', ['id']);
+            $simtable->add_index('course_source_idx', XMLDB_INDEX_NOTUNIQUE, ['courseid', 'source']);
+            $simtable->add_index('material_idx', XMLDB_INDEX_NOTUNIQUE, ['materialid']);
+            $dbman->create_table($simtable);
+        }
+
+        upgrade_plugin_savepoint(true, 2026053001, 'local', 'aiskillnavigator');
+    }
+
     return true;
 }

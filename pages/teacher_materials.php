@@ -1,27 +1,21 @@
 <?php
 
 require_once(__DIR__ . '/../../../config.php');
-require_once(__DIR__ . '/../includes/ai_output_formatter.php');
 require_once(__DIR__ . '/../includes/back_to_course_helper.php');
-require_once(__DIR__ . '/../includes/ui_style_helper.php');
-require_once(__DIR__ . '/../includes/course_resource_sync.php');
 require_once(__DIR__ . '/../includes/material_ai_policy.php');
+require_once(__DIR__ . '/../includes/course_resource_sync.php');
+require_once(__DIR__ . '/../includes/mojibake_guard.php');
 
-use local_aiskillnavigator\service\embedding_service;
-use local_aiskillnavigator\service\material_extractor;
+global $DB, $PAGE, $OUTPUT, $USER;
 
-global $PAGE, $OUTPUT, $DB, $USER;
+$courseid = required_param('courseid', PARAM_INT);
+$action = optional_param('action', '', PARAM_ALPHA);
+$materialid = optional_param('materialid', 0, PARAM_INT);
 
-$courseid = optional_param('courseid', SITEID, PARAM_INT);
 $course = get_course($courseid);
-
 require_login($course);
-
-if (function_exists('local_aiskillnavigator_sync_course_resources') && $courseid > 1) {
-    local_aiskillnavigator_sync_course_resources((int)$courseid, (int)$USER->id, false);
-}
-
 $context = context_course::instance($courseid);
+
 require_capability('local/aiskillnavigator:managematerials', $context);
 
 $PAGE->set_context($context);
@@ -29,359 +23,433 @@ $PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/teacher_materials.p
 $PAGE->set_title('Course materials / RAG');
 $PAGE->set_heading('Course materials / RAG');
 
-$action = optional_param('action', '', PARAM_ALPHA);
-
-$message = '';
-$error = '';
-$ragmessage = '';
-
-if ($action === 'save') {
-    require_sesskey();
-
-    $title = required_param('title', PARAM_TEXT);
-    $materialtype = optional_param('materialtype', 'text', PARAM_ALPHA);
-    $manualcontent = optional_param('content', '', PARAM_RAW);
-    $externalaiallowed = optional_param('externalaiallowed', 0, PARAM_BOOL);
-
-    $finalcontent = trim($manualcontent);
-    $finaltype = $materialtype;
-
-    if (!empty($_FILES['materialfile']) && !empty($_FILES['materialfile']['name'])) {
-        $extraction = material_extractor::extract_from_upload($_FILES['materialfile']);
-
-        if (!$extraction['success']) {
-            $error = $extraction['message'];
-        } else {
-            $finalcontent = $extraction['content'];
-            $finaltype = $extraction['type'];
-            $message = $extraction['message'];
-        }
-    }
-
-    if ($error === '') {
-        if ($finalcontent === '') {
-            $error = 'No content found. Upload a supported file or paste text manually.';
-        } else {
-            $now = time();
-
-            $record = new stdClass();
-            $record->courseid = $courseid;
-            $record->userid = $USER->id;
-            $record->title = $title;
-            $record->materialtype = $finaltype;
-            $record->content = $finalcontent;
-            $record->externalaiallowed = $externalaiallowed ? 1 : 0;
-            $record->aipolicy = $externalaiallowed ? 'external_allowed' : 'local_only';
-            $record->timecreated = $now;
-            $record->timemodified = $now;
-
-            $materialid = $DB->insert_record('local_aiskillnav_material', $record);
-
-            $message = trim($message . ' Material saved successfully.');
-
-            $embeddingservice = new embedding_service();
-            $indexresult = $embeddingservice->index_material(
-                (int)$materialid,
-                $courseid,
-                $title,
-                $finalcontent
-            );
-
-            $ragmessage = $indexresult['success']
-                ? $indexresult['message']
-                : 'RAG indexing warning: ' . $indexresult['message'];
-        }
-    }
+function local_aisn_tm_table_exists(string $name): bool {
+    global $DB;
+    return $DB->get_manager()->table_exists(new xmldb_table($name));
 }
 
-if ($action === 'allowexternal' || $action === 'localonly') {
-    require_sesskey();
+function local_aisn_tm_get_material(int $materialid, int $courseid): stdClass {
+    global $DB;
 
-    $id = required_param('id', PARAM_INT);
-    $ok = local_aiskillnavigator_set_material_ai_policy($id, $courseid, $action === 'allowexternal');
+    $material = $DB->get_record('local_aiskillnav_material', [
+        'id' => $materialid,
+        'courseid' => $courseid,
+    ]);
 
-    $message = $ok
-        ? 'AI access policy updated.'
-        : 'Material not found.';
+    if (!$material) {
+        throw new moodle_exception('invalidrecord', 'error');
+    }
+
+    return $material;
 }
 
-if ($action === 'delete') {
-    require_sesskey();
+function local_aisn_tm_visible_course_materials(int $courseid): array {
+    global $DB;
 
-    $id = required_param('id', PARAM_INT);
-    $material = $DB->get_record('local_aiskillnav_material', ['id' => $id, 'courseid' => $courseid]);
+    if (!local_aisn_tm_table_exists('local_aiskillnav_material')) {
+        return [];
+    }
 
-    if ($material) {
-        $embeddingservice = new embedding_service();
+    local_aiskillnavigator_sync_course_resources($courseid, 0, true);
 
-        if (method_exists($embeddingservice, 'delete_material_chunks')) {
-            $embeddingservice->delete_material_chunks((int)$material->id);
+    $records = $DB->get_records('local_aiskillnav_material', [
+        'courseid' => $courseid,
+        'materialtype' => 'course_resource',
+    ], 'title ASC');
+
+    $modinfo = get_fast_modinfo($courseid);
+    $visible = [];
+
+    foreach ($records as $record) {
+        $title = (string)($record->title ?? '');
+
+        if (!preg_match('/^\[Course #([0-9]+) \/ cm #([0-9]+)\]/', $title, $matches)) {
+            continue;
         }
 
-        $DB->delete_records('local_aiskillnav_material', ['id' => $id, 'courseid' => $courseid]);
-        $message = 'Material and RAG index deleted.';
-    } else {
-        $error = 'Material not found or not available in this course.';
+        $cmid = (int)$matches[2];
+
+        if (empty($modinfo->cms[$cmid]) || empty($modinfo->cms[$cmid]->visible)) {
+            continue;
+        }
+
+        $visible[(int)$record->id] = $record;
     }
+
+    return $visible;
 }
 
-if ($action === 'reindex') {
-    require_sesskey();
+function local_aisn_tm_cm_id_from_title(string $title): int {
+    if (preg_match('/^\[Course #[0-9]+ \/ cm #([0-9]+)\]/', $title, $matches)) {
+        return (int)$matches[1];
+    }
 
-    $id = required_param('id', PARAM_INT);
-    $material = $DB->get_record('local_aiskillnav_material', ['id' => $id, 'courseid' => $courseid]);
+    return 0;
+}
 
-    if ($material) {
-        $embeddingservice = new embedding_service();
-        $indexresult = $embeddingservice->index_material(
-            (int)$material->id,
-            $courseid,
-            (string)$material->title,
-            (string)$material->content
+function local_aisn_tm_clean_course_title(string $title): string {
+    $title = preg_replace('/^\[Course #[0-9]+ \/ cm #[0-9]+\]\s*/', '', $title);
+    return trim((string)$title);
+}
+
+function local_aisn_tm_excerpt(string $content, int $max = 600): string {
+    $content = trim(preg_replace('/\s+/u', ' ', strip_tags($content)));
+
+    if (core_text::strlen($content) > $max) {
+        return core_text::substr($content, 0, $max) . '...';
+    }
+
+    return $content;
+}
+
+function local_aisn_tm_chunk_counts(array $materials): array {
+    global $DB;
+
+    if (empty($materials) || !local_aisn_tm_table_exists('local_aiskillnav_chunk')) {
+        return [];
+    }
+
+    $ids = array_keys($materials);
+    list($insql, $params) = $DB->get_in_or_equal($ids, SQL_PARAMS_NAMED, 'mid');
+
+    $sql = "SELECT materialid, COUNT(1) AS chunks
+              FROM {local_aiskillnav_chunk}
+             WHERE materialid $insql
+          GROUP BY materialid";
+
+    $rows = $DB->get_records_sql($sql, $params);
+    $counts = [];
+
+    foreach ($rows as $row) {
+        $counts[(int)$row->materialid] = (int)$row->chunks;
+    }
+
+    return $counts;
+}
+
+function local_aisn_tm_set_policy(stdClass $material, bool $externalallowed): void {
+    global $DB;
+
+    $material->externalaiallowed = $externalallowed ? 1 : 0;
+    $material->aipolicy = $externalallowed ? 'external_allowed' : 'local_only';
+    $material->timemodified = time();
+
+    $DB->update_record('local_aiskillnav_material', $material);
+
+    $cmid = local_aisn_tm_cm_id_from_title((string)$material->title);
+
+    if ($cmid > 0) {
+        set_config(
+            'cm_external_ai_' . $cmid,
+            $externalallowed ? '1' : '0',
+            'local_aiskillnavigator'
         );
-
-        $message = $indexresult['success']
-            ? 'Re-indexed: ' . $indexresult['message']
-            : 'Re-index failed: ' . $indexresult['message'];
-    } else {
-        $error = 'Material not found or not available in this course.';
     }
 }
 
-$materials = $DB->get_records(
-    'local_aiskillnav_material',
-    ['courseid' => $courseid],
-    'timecreated DESC'
-);
+function local_aisn_tm_delete_material(stdClass $material): void {
+    global $DB;
 
-$embeddingservice = new embedding_service();
-$chunkscounts = [];
+    if (local_aisn_tm_table_exists('local_aiskillnav_chunk')) {
+        $DB->delete_records('local_aiskillnav_chunk', ['materialid' => (int)$material->id]);
+    }
 
-foreach ($materials as $material) {
-    $chunkscounts[(int)$material->id] = $embeddingservice->count_indexed_chunks($courseid, (int)$material->id);
+    $DB->delete_records('local_aiskillnav_material', ['id' => (int)$material->id]);
 }
 
-$totalchunks = $embeddingservice->count_indexed_chunks($courseid);
+if ($action !== '' && $materialid > 0) {
+    $material = local_aisn_tm_get_material($materialid, $courseid);
+
+    if ($action === 'allow') {
+        local_aisn_tm_set_policy($material, true);
+        redirect($PAGE->url, 'Material allowed for external AI providers.', 1);
+    }
+
+    if ($action === 'restrict') {
+        local_aisn_tm_set_policy($material, false);
+        redirect($PAGE->url, 'Material restricted to local AI only.', 1);
+    }
+
+    if ($action === 'delete') {
+        local_aisn_tm_delete_material($material);
+        redirect($PAGE->url, 'Material record deleted from AI index.', 1);
+    }
+}
+
+$materials = local_aisn_tm_visible_course_materials($courseid);
+$chunkscounts = local_aisn_tm_chunk_counts($materials);
 
 echo $OUTPUT->header();
-local_aiskillnavigator_print_inline_styles();
 
-echo html_writer::start_div('container-fluid');
-
-echo html_writer::tag('h2', 'Course materials / RAG');
-
-echo html_writer::tag('p', 'Course: ' . s($course->fullname), ['class' => 'text-muted']);
-
-echo html_writer::tag(
-    'p',
-    'Upload or review Moodle course materials. The teacher decides whether each material can be used only with local AI or also with external AI providers.',
-    ['class' => 'lead']
-);
-
-echo html_writer::div(local_aiskillnavigator_provider_privacy_notice(), 'alert alert-info');
-
-if ($totalchunks > 0) {
-    echo html_writer::div('RAG index active: ' . $totalchunks . ' chunks indexed for this course.', 'alert alert-success');
-} else {
-    echo html_writer::div('No RAG chunks indexed yet. Upload or re-index materials to enable semantic search.', 'alert alert-warning');
+echo html_writer::tag('style', '
+body.path-local-aiskillnavigator #page-header,
+body.path-local-aiskillnavigator #page-navbar,
+body.path-local-aiskillnavigator .secondary-navigation,
+body.path-local-aiskillnavigator nav.moremenu,
+body.path-local-aiskillnavigator .moremenu,
+body.path-local-aiskillnavigator .nav-tabs {
+    display: none !important;
 }
 
-if ($message !== '') {
-    echo html_writer::div(s($message), 'alert alert-success');
+.aisn-material-policy-page {
+    max-width: 1180px;
+    margin: 0 auto;
 }
 
-if ($ragmessage !== '') {
-    echo html_writer::div(s($ragmessage), 'alert alert-info');
+.aisn-material-policy-page .alert {
+    border-radius: 14px;
 }
 
-if ($error !== '') {
-    echo html_writer::div(s($error), 'alert alert-danger');
+.aisn-material-policy-page .card {
+    border-radius: 18px;
 }
+');
 
-echo html_writer::start_div('card mb-4');
-echo html_writer::start_div('card-body');
 
-echo html_writer::tag('h3', 'Add material');
-
-echo html_writer::start_tag('form', [
-    'method' => 'post',
-    'action' => new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php'),
-    'enctype' => 'multipart/form-data',
-]);
-
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => 'save']);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'courseid', 'value' => $courseid]);
-
-echo html_writer::start_div('form-group');
-echo html_writer::tag('label', 'Title', ['for' => 'title']);
-echo html_writer::empty_tag('input', [
-    'type' => 'text',
-    'name' => 'title',
-    'id' => 'title',
-    'class' => 'form-control',
-    'required' => 'required',
-    'placeholder' => 'Example: Lesson 1 - Functions',
-]);
-echo html_writer::end_div();
-
-echo html_writer::start_div('form-group mt-3');
-echo html_writer::tag('label', 'Upload slides/text file', ['for' => 'materialfile']);
-echo html_writer::empty_tag('input', [
-    'type' => 'file',
-    'name' => 'materialfile',
-    'id' => 'materialfile',
-    'class' => 'form-control',
-]);
-echo html_writer::tag('small', 'Supported by extractor: TXT/PPTX and other text-like files depending on server support.', ['class' => 'form-text text-muted']);
-echo html_writer::end_div();
-
-echo html_writer::start_div('form-group mt-3');
-echo html_writer::tag('label', 'Material type', ['for' => 'materialtype']);
-echo html_writer::select(
-    [
-        'slide' => 'Slide',
-        'text' => 'Text',
-        'course_resource' => 'Course resource',
-        'other' => 'Other',
-    ],
-    'materialtype',
-    'text',
-    false,
-    ['class' => 'form-control', 'id' => 'materialtype']
-);
-echo html_writer::end_div();
-
-echo html_writer::start_div('form-group mt-3');
-echo html_writer::tag('label', 'Optional manual content / fallback text', ['for' => 'content']);
-echo html_writer::tag('textarea', '', [
-    'name' => 'content',
-    'id' => 'content',
-    'class' => 'form-control',
-    'rows' => 8,
-    'placeholder' => 'Optional: paste text here if you do not upload a file.',
-]);
-echo html_writer::end_div();
-
-echo html_writer::start_div('form-group form-check mt-3');
-echo html_writer::empty_tag('input', [
-    'type' => 'checkbox',
-    'name' => 'externalaiallowed',
-    'id' => 'externalaiallowed',
-    'value' => 1,
-    'class' => 'form-check-input',
-]);
-echo html_writer::tag(
-    'label',
-    'Allow this material to be used also with external AI providers such as OpenRouter/OpenAI/DeepSeek/Gemini/Claude via API.',
-    ['for' => 'externalaiallowed', 'class' => 'form-check-label']
-);
-echo html_writer::tag('small', 'If unchecked, the material remains usable only with local/prototype AI providers.', ['class' => 'form-text text-muted']);
-echo html_writer::end_div();
-
-echo html_writer::empty_tag('input', [
-    'type' => 'submit',
-    'class' => 'btn btn-primary mt-3',
-    'value' => 'Extract, index and save material',
-]);
-
-echo html_writer::end_tag('form');
-
-echo html_writer::end_div();
-echo html_writer::end_div();
-
-echo html_writer::tag('h3', 'Saved materials');
+echo html_writer::start_div('container-fluid aisn-material-policy-page');
 
 if (empty($materials)) {
-    echo html_writer::div('No materials saved yet.', 'alert alert-info');
-} else {
-    foreach ($materials as $material) {
-        $materialid = (int)$material->id;
-        $preview = trim(preg_replace('/\s+/', ' ', (string)$material->content));
+    echo html_writer::div(
+        'No visible course resources found. Add a file/page/resource in Moodle Edit mode or create material through AI Course Builder; this page will synchronize automatically.',
+        'alert alert-warning'
+    );
 
-        if (\core_text::strlen($preview) > 600) {
-            $preview = \core_text::substr($preview, 0, 600) . '...';
-        }
-
-        echo html_writer::start_div('card mb-3');
-        echo html_writer::start_div('card-body');
-
-        echo html_writer::tag('h4', s($material->title));
-        echo html_writer::tag(
-            'p',
-            'Type: ' . s($material->materialtype) .
-            ' ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· RAG chunks: ' . (int)($chunkscounts[$materialid] ?? 0) .
-            ' ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· AI policy: ' . s(local_aiskillnavigator_ai_policy_label($material)),
-            ['class' => 'text-muted']
-        );
-
-        echo html_writer::span(s(local_aiskillnavigator_ai_policy_label($material)), local_aiskillnavigator_ai_policy_badge_class($material));
-
-        echo html_writer::tag('pre', s($preview), [
-            'style' => 'white-space: pre-wrap; max-height: 220px; overflow:auto; background:#f8f9fa; padding:12px; border-radius:12px; margin-top:12px;',
-        ]);
-
-        echo html_writer::link(
-            new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', [
-                'action' => 'reindex',
-                'id' => $materialid,
-                'courseid' => $courseid,
-                'sesskey' => sesskey(),
-            ]),
-            'Re-index for RAG',
-            ['class' => 'btn btn-secondary btn-sm mr-2']
-        );
-
-        if (local_aiskillnavigator_material_external_allowed($material)) {
-            echo html_writer::link(
-                new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', [
-                    'action' => 'localonly',
-                    'id' => $materialid,
-                    'courseid' => $courseid,
-                    'sesskey' => sesskey(),
-                ]),
-                'Restrict to local AI only',
-                ['class' => 'btn btn-warning btn-sm mr-2']
-            );
-        } else {
-            echo html_writer::link(
-                new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', [
-                    'action' => 'allowexternal',
-                    'id' => $materialid,
-                    'courseid' => $courseid,
-                    'sesskey' => sesskey(),
-                ]),
-                'Allow external AI',
-                ['class' => 'btn btn-success btn-sm mr-2']
-            );
-        }
-
-        echo html_writer::link(
-            new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', [
-                'action' => 'delete',
-                'id' => $materialid,
-                'courseid' => $courseid,
-                'sesskey' => sesskey(),
-            ]),
-            'Delete',
-            ['class' => 'btn btn-danger btn-sm']
-        );
-
-        echo html_writer::end_div();
-        echo html_writer::end_div();
-    }
+    echo html_writer::end_div();
+echo $OUTPUT->footer();
+    exit;
 }
+
+echo html_writer::tag('h3', 'Synchronized course materials');
+
+echo html_writer::tag('style', '
+.aisn-material-search-wrap {
+    margin: 16px 0 22px;
+}
+.aisn-material-search {
+    max-width: 520px;
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+.aisn-bottom-back {
+    margin-top: 28px;
+}
+');
+
+echo html_writer::start_div('aisn-material-search-wrap');
+echo html_writer::empty_tag('input', [
+    'type' => 'search',
+    'id' => 'aisn-material-search',
+    'class' => 'form-control aisn-material-search',
+    'placeholder' => 'Search by title, filename, text or AI policy...'
+]);
+echo html_writer::end_div();
+
+echo html_writer::tag('script', '
+(function() {
+    const search = document.getElementById("aisn-material-search");
+    if (!search) { return; }
+
+    const cards = Array.from(document.querySelectorAll("[data-aisn-material-card]"));
+
+    search.addEventListener("input", function() {
+        const q = String(search.value || "").toLowerCase().trim();
+
+        cards.forEach(function(card) {
+            const haystack = String(card.dataset.search || card.textContent || "").toLowerCase();
+            card.style.display = haystack.indexOf(q) !== -1 ? "" : "none";
+        });
+    });
+})();
+');
+
+
+foreach ($materials as $material) {
+    $materialid = (int)$material->id;
+    $title = local_aisn_tm_clean_course_title((string)$material->title);
+    $content = (string)($material->content ?? '');
+    $chunks = (int)($chunkscounts[$materialid] ?? 0);
+    $policylabel = local_aiskillnavigator_ai_policy_label($material);
+    $externalallowed = local_aiskillnavigator_material_can_be_sent_to_current_ai($material);
+
+    echo html_writer::start_div('card mb-3 shadow-sm', [
+        'data-aisn-material-card' => '1',
+        'data-search' => core_text::strtolower($title . ' ' . $content . ' ' . $policylabel),
+    ]);
+    echo html_writer::start_div('card-body');
+
+    echo html_writer::tag('h4', s($title));
+
+    echo html_writer::tag(
+        'p',
+        'Type: course resource | RAG chunks: ' . $chunks . ' | AI policy: ' . s($policylabel),
+        ['class' => 'text-muted']
+    );
+
+    echo html_writer::span(
+        s($policylabel),
+        local_aiskillnavigator_ai_policy_badge_class($material)
+    );
+
+    echo html_writer::tag('pre', s(local_aisn_tm_excerpt($content)), [
+        'class' => 'mt-3 p-3 bg-light rounded',
+        'style' => 'white-space: pre-wrap;',
+    ]);
+
+    echo html_writer::start_div('mt-3');
+if ($externalallowed) {
+        echo html_writer::link(
+            new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', [
+                'courseid' => $courseid,
+                'materialid' => $materialid,
+                'action' => 'restrict',
+                'sesskey' => sesskey(),
+            ]),
+            'Restrict to local AI only',
+            ['class' => 'btn btn-warning btn-sm mr-2']
+        );
+    } else {
+        echo html_writer::link(
+            new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', [
+                'courseid' => $courseid,
+                'materialid' => $materialid,
+                'action' => 'allow',
+                'sesskey' => sesskey(),
+            ]),
+            'Allow external AI',
+            ['class' => 'btn btn-success btn-sm mr-2']
+        );
+    }
+
+    echo html_writer::link(
+        new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', [
+            'courseid' => $courseid,
+            'materialid' => $materialid,
+            'action' => 'delete',
+            'sesskey' => sesskey(),
+        ]),
+        'Delete AI index record',
+        ['class' => 'btn btn-danger btn-sm']
+    );
+
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+}
+
 
 echo html_writer::div(
     html_writer::link(
-        new moodle_url('/local/aiskillnavigator/pages/index.php', ['courseid' => $courseid]),
+        new moodle_url('/course/view.php', ['id' => $courseid]),
         'Back to course',
-        ['class' => 'btn btn-secondary mt-3']
-    )
+        ['class' => 'btn btn-secondary']
+    ),
+    'aisn-bottom-back'
 );
 
 echo html_writer::end_div();
 
-echo local_aisn_back_to_course_autofix((int)($courseid ?? optional_param('courseid', optional_param('id', 0, PARAM_INT), PARAM_INT)));
-if (function_exists('local_aisn_ai_output_formatter_assets')) { echo local_aisn_ai_output_formatter_assets(); }
+if (function_exists('local_aiskillnavigator_mojibake_guard')) {
+    echo local_aiskillnavigator_mojibake_guard();
+}
 echo $OUTPUT->footer();
+
+
+
+
+
+
+echo html_writer::tag('script', <<<'JS'
+/* AISN_SEARCH_V4_START */
+(function () {
+    function norm(value) {
+        return String(value || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+    }
+
+    function getSearchInput() {
+        return document.getElementById("aisn-material-search") ||
+            document.querySelector("input[type='search']") ||
+            document.querySelector("input.form-control");
+    }
+
+    function getCards() {
+        return Array.from(document.querySelectorAll(".card"));
+    }
+
+    function ensureEmptyMessage(input) {
+        var empty = document.getElementById("aisn-material-search-empty-v4");
+
+        if (!empty) {
+            empty = document.createElement("div");
+            empty.id = "aisn-material-search-empty-v4";
+            empty.className = "alert alert-warning mt-3";
+            empty.textContent = "No materials found.";
+            empty.style.display = "none";
+            input.insertAdjacentElement("afterend", empty);
+        }
+
+        return empty;
+    }
+
+    function applyFilter() {
+        var input = getSearchInput();
+
+        if (!input) {
+            return;
+        }
+
+        input.id = "aisn-material-search";
+        input.placeholder = "Search by title, filename, text or AI policy...";
+
+        var query = norm(input.value);
+        var cards = getCards();
+        var visible = 0;
+
+        cards.forEach(function (card) {
+            var text = norm(card.innerText || card.textContent || "");
+            var match = query === "" || text.indexOf(query) !== -1;
+
+            card.style.setProperty("display", match ? "" : "none", "important");
+
+            if (match) {
+                visible++;
+            }
+        });
+
+        var empty = ensureEmptyMessage(input);
+        empty.style.display = visible === 0 ? "" : "none";
+    }
+
+    function init() {
+        var input = getSearchInput();
+
+        if (!input) {
+            return;
+        }
+
+        input.oninput = applyFilter;
+        input.onkeyup = applyFilter;
+        input.onchange = applyFilter;
+        input.onsearch = applyFilter;
+
+        window.aisnMaterialSearchFilter = applyFilter;
+
+        applyFilter();
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
+
+    setTimeout(init, 200);
+    setTimeout(init, 800);
+    setTimeout(init, 1600);
+})();
+/* AISN_SEARCH_V4_END */
+JS);

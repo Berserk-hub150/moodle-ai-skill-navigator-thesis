@@ -56,7 +56,7 @@ function local_aisn_p2m_section_text(string $text): string {
     $text = strip_tags($text);
     $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $text = str_replace(["\xC2\xA0", "\t", "\r", "\n"], ' ', $text);
-    $text = str_replace(['â€œ', 'â€', 'â€ž', 'Â«', 'Â»', 'â€˜', 'â€™', '`'], '"', $text);
+    $text = str_replace(['Ã¢â‚¬Å“', 'Ã¢â‚¬Â', 'Ã¢â‚¬Å¾', 'Ã‚Â«', 'Ã‚Â»', 'Ã¢â‚¬Ëœ', 'Ã¢â‚¬â„¢', '`'], '"', $text);
     $text = preg_replace('/\s+/u', ' ', (string)$text);
     $text = trim((string)$text);
     $text = trim($text, " \t\n\r\0\x0B\"'.,:;()[]{}");
@@ -430,142 +430,89 @@ function local_aisn_p2m_lines(string $prompt): array {
     return $lines;
 }
 
-function local_aisn_p2m_extract_target_after_section(string $text): string {
-    if (preg_match('/sezion[ei]\s+["ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ]?([^"ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â.;,\n]+)["ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â]?/iu', $text, $m)) {
-        return trim($m[1]);
-    }
 
-    return '';
+function local_aisn_p2m_strip_outer_quotes(string $value): string {
+    $value = trim($value);
+    return trim($value, " \t\n\r\0\x0B\"'“”‘’«»");
 }
 
-function local_aisn_p2m_execute_prompt(int $courseid, int $userid, string $prompt, array $files): array {
+
+function local_aisn_p2m_extract_target_after_section(string $prompt): ?string {
+    $patterns = [
+        '/(?:nella|alla|dentro la|sotto la|in)\\s+sezione\\s+["“”\'‘’«»]?([^"“”\'‘’«».:,;\\n\\r]+)["“”\'‘’«»]?/iu',
+        '/sezione\\s+["“”\'‘’«»]([^"“”\'‘’«»]+)["“”\'‘’«»]/iu',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $prompt, $matches)) {
+            $name = local_aisn_p2m_strip_outer_quotes((string)$matches[1]);
+            return $name !== '' ? $name : null;
+        }
+    }
+
+    return null;
+}
+
+
+function local_aisn_p2m_execute_prompt(int $courseid, string $prompt): array {
     global $DB;
 
+    $norm = local_aisn_p2m_normalize_text($prompt);
     $logs = [];
-    $createdsections = [];
-    $targetforfiles = null;
+    $created = [];
 
-    foreach (local_aisn_p2m_lines($prompt) as $line) {
-        $low = local_aisn_p2m_low($line);
-
-        if (preg_match('/^(crea|aggiungi|inserisci|metti|mettimi|fammi|prepara|preparami|costruisci)(mi)?\s+(una\s+)?sezion[ei]\s+["ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ]?(.+?)["ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â]?$/iu', $line, $m)) {
-            $title = local_aisn_p2m_clean_section_title((string)$m[4]);
-            $title = local_aisn_p2m_clean_section_title($title);
-            $section = local_aisn_p2m_create_section($courseid, $title);
-            $createdsections[] = $section;
-            $targetforfiles = $section;
-            $logs[] = 'Creata sezione: ' . s((string)$section->name) . ' (#' . (int)$section->section . ')';
-            continue;
-        }
-
-        if (preg_match('/^(rinomina|cambia nome)\s+(?:la\s+)?sezion[ei]\s+(.+?)\s+(?:in|come)\s+["ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ]?(.+?)["ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â]?$/iu', $line, $m)) {
-            $section = local_aisn_p2m_find_section($courseid, $m[2]);
-            if ($section) {
-                local_aisn_p2m_update_section($section, $m[3], '');
-                $logs[] = 'Rinominata sezione "' . trim($m[2]) . '" in "' . trim($m[3]) . '"';
-            } else {
-                $logs[] = 'Sezione da rinominare non trovata: ' . trim($m[2]);
-            }
-            continue;
-        }
-
-        if (preg_match('/^(nascondi|rendi invisibile|hide)\s+(?:la\s+)?sezion[ei]\s+(.+)$/iu', $line, $m)) {
-            $section = local_aisn_p2m_find_section($courseid, $m[2]);
-            if ($section) {
-                local_aisn_p2m_set_visibility($section, false);
-                $logs[] = 'Nascosta sezione: ' . (string)$section->name;
-            } else {
-                $logs[] = 'Sezione da nascondere non trovata: ' . trim($m[2]);
-            }
-            continue;
-        }
-
-        if (preg_match('/^(mostra|pubblica|rendi visibile|show)\s+(?:la\s+)?sezion[ei]\s+(.+)$/iu', $line, $m)) {
-            $section = local_aisn_p2m_find_section($courseid, $m[2]);
-            if ($section) {
-                local_aisn_p2m_set_visibility($section, true);
-                $logs[] = 'Resa visibile sezione: ' . (string)$section->name;
-            } else {
-                $logs[] = 'Sezione da mostrare non trovata: ' . trim($m[2]);
-            }
-            continue;
-        }
-
-        if (preg_match('/^(duplica|copia)\s+(?:la\s+)?sezion[ei]\s+(.+?)(?:\s+(?:come|chiamandola)\s+["ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ]?(.+?)["ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â]?)?$/iu', $line, $m)) {
-            $section = local_aisn_p2m_find_section($courseid, $m[2]);
-            if ($section) {
-                $copy = local_aisn_p2m_duplicate_section($courseid, $section, trim((string)($m[3] ?? '')));
-                $createdsections[] = $copy;
-                $targetforfiles = $copy;
-                $logs[] = 'Duplicata sezione "' . (string)$section->name . '" in "' . (string)$copy->name . '"';
-            } else {
-                $logs[] = 'Sezione da duplicare non trovata: ' . trim($m[2]);
-            }
-            continue;
-        }
-
-        if (preg_match('/^(sposta|muovi)\s+(?:la\s+)?sezion[ei]\s+(.+?)\s+(dopo|prima)\s+(?:la\s+)?sezion[ei]\s+(.+)$/iu', $line, $m)) {
-            $section = local_aisn_p2m_find_section($courseid, $m[2]);
-            $target = local_aisn_p2m_find_section($courseid, $m[4]);
-
-            if ($section && $target) {
-                $destination = (int)$target->section + (local_aisn_p2m_low($m[3]) === 'dopo' ? 1 : 0);
-                $status = local_aisn_p2m_move_section($courseid, $section, $destination);
-                $logs[] = 'Spostamento sezione "' . (string)$section->name . '": ' . $status;
-            } else {
-                $logs[] = 'Spostamento non riuscito: sezione o destinazione non trovata.';
-            }
-            continue;
-        }
-
-        if (preg_match('/^(metti|aggiungi|imposta|scrivi)\s+(?:un\s+)?riassunto\s+(?:in|nella|sulla|alla)\s+(?:parte superiore\s+della\s+)?sezion[ei]\s+(.+?)\s*[:\-]\s*(.+)$/iu', $line, $m)) {
-            $section = local_aisn_p2m_find_section($courseid, $m[1]);
-
-            if ($section) {
-                local_aisn_p2m_update_section($section, '', $m[2]);
-                $logs[] = 'Riassunto aggiornato nella sezione: ' . (string)$section->name;
-            } else {
-                $logs[] = 'Sezione per riassunto non trovata: ' . trim($m[1]);
-            }
-            continue;
-        }
-
-        if (preg_match('/(metti|mettimi|carica|caricami|aggiungi|aggiungimi|inserisci|inseriscimi).*(materiali|file|slide|pdf|documenti).*(?:nella|nella sezione|in|alla)\s+sezion[ei]\s+(.+)/iu', $line, $m)) {
-            $section = local_aisn_p2m_find_section($courseid, $m[3]);
-
-            if ($section) {
-                $targetforfiles = $section;
-                $logs[] = 'Target materiali impostato su sezione: ' . (string)$section->name;
-            } else {
-                $logs[] = 'Sezione target materiali non trovata: ' . trim($m[3]);
-            }
-            continue;
+    $targetsection = local_aisn_p2m_extract_target_after_section($prompt);
+    $targetsectionnum = null;
+    if ($targetsection !== null) {
+        $targetsectionnum = local_aisn_p2m_find_section_number_by_name($courseid, $targetsection);
+        if ($targetsectionnum === null) {
+            $logs[] = 'Sezione richiesta non trovata: ' . s($targetsection) . '. Creo il contenuto nella prima sezione disponibile.';
         }
     }
 
-    if (!empty($files)) {
-        if (!$targetforfiles) {
-            if (!empty($createdsections)) {
-                $targetforfiles = $createdsections[count($createdsections) - 1];
-            } else {
-                $targetforfiles = local_aisn_p2m_get_section($courseid, 1);
+    if (preg_match('/quiz|test|verifica|domande|questionario/i', $norm)) {
+        $name = 'Quiz AI - ' . userdate(time(), get_string('strftimedatetimeshort', 'core_langconfig'));
+        if (preg_match('/(?:chiamato|nome|titolo)\s+["“”\'‘’«»]([^"“”\'‘’«»]+)["“”\'‘’«»]/iu', $prompt, $matches)) {
+            $candidate = local_aisn_p2m_strip_outer_quotes((string)$matches[1]);
+            if ($candidate !== '') {
+                $name = $candidate;
             }
         }
 
-        if ($targetforfiles) {
-            $logs = array_merge($logs, local_aisn_p2m_attach_files_to_section($courseid, $userid, $targetforfiles, $files));
-        } else {
-            $logs[] = 'Materiali caricati, ma nessuna sezione target trovata.';
+        $quiz = local_aisn_p2m_create_quiz($courseid, $name, $targetsectionnum);
+        $created[] = [
+            'type' => 'quiz',
+            'name' => $quiz['name'],
+            'cmid' => $quiz['cmid'],
+            'url' => $quiz['url'],
+        ];
+        $logs[] = 'Creato quiz: ' . $quiz['name'];
+    }
+
+    if (preg_match('/pagina|html|contenuto|risorsa|materiale|spiegazione|testo/i', $norm)) {
+        $title = 'Materiale AI - ' . userdate(time(), get_string('strftimedatetimeshort', 'core_langconfig'));
+        if (preg_match('/(?:chiamat[ao]|nome|titolo)\s+["“”\'‘’«»]([^"“”\'‘’«»]+)["“”\'‘’«»]/iu', $prompt, $matches)) {
+            $candidate = local_aisn_p2m_strip_outer_quotes((string)$matches[1]);
+            if ($candidate !== '') {
+                $title = $candidate;
+            }
         }
+
+        $page = local_aisn_p2m_create_page($courseid, $title, '<p>' . s($prompt) . '</p>', $targetsectionnum);
+        $created[] = [
+            'type' => 'page',
+            'name' => $page['name'],
+            'cmid' => $page['cmid'],
+            'url' => $page['url'],
+        ];
+        $logs[] = 'Creata pagina: ' . $page['name'];
     }
 
-    rebuild_course_cache($courseid, true);
-
-    if (empty($logs)) {
-        $logs[] = 'Nessun comando riconosciuto. Usa esempi tipo: crea sezione "HTML base"; nascondi sezione 2; metti materiali nella sezione "HTML base"; metti riassunto nella sezione 1: testo...';
+    if (empty($created)) {
+        $logs[] = 'Nessun comando riconosciuto. Prova con: crea un quiz, crea una pagina, aggiungi materiale HTML.';
     }
 
-    return $logs;
+    return ['created' => $created, 'logs' => $logs];
 }
 
 $result = [];
@@ -1034,3 +981,4 @@ function local_aisn_p2m_execute_prompt_ai(int $courseid, int $userid, string $pr
     array_unshift($fallback, 'AI planner non disponibile o JSON non valido: usato fallback a comandi semplici.');
     return $fallback;
 }
+

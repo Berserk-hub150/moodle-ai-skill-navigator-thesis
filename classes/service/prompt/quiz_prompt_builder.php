@@ -20,7 +20,7 @@ class quiz_prompt_builder extends base_prompt_helper {
         $difficulty = $this->default_if_empty($difficulty, 'medium');
 
         return "Prepara un breve test universitario in italiano.\n"
-            . "Argomento: {$topic}\nDifficoltÃƒÆ’Ã‚Â : {$difficulty}\n\n"
+            . "Argomento: {$topic}\nDifficoltà: {$difficulty}\n\n"
             . $this->rules->format() . $this->rules->quality()
             . $this->schema->get($topic, $difficulty);
     }
@@ -30,7 +30,7 @@ class quiz_prompt_builder extends base_prompt_helper {
         $difficulty = $this->default_if_empty($difficulty, 'medium');
 
         return "Prepara un breve test usando solo i materiali qui sotto.\n"
-            . "Focus: {$topic}\nDifficoltÃƒÆ’Ã‚Â : {$difficulty}\n\n"
+            . "Focus: {$topic}\nDifficoltà: {$difficulty}\n\n"
             . "Materiali:\n" . $this->material_context($materials, self::MATERIAL_LIMIT) . "\n"
             . $this->rules->format() . $this->rules->quality()
             . "Nel campo skill scrivi il concetto valutato.\n\n"

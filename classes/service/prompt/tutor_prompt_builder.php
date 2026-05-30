@@ -11,7 +11,7 @@ class tutor_prompt_builder extends base_prompt_helper {
         return "Rispondi come tutor di un corso universitario.\n"
             . "Lingua: italiano.\n"
             . "Non fare una premessa lunga. Rispondi alla domanda.\n"
-            . "Se la domanda ÃƒÆ’Ã‚Â¨ poco chiara, dichiara l'interpretazione scelta.\n"
+            . "Se la domanda è poco chiara, dichiara l'interpretazione scelta.\n"
             . "Se un dettaglio non lo sai, non inventarlo.\n\n"
             . "Domanda:\n" . trim($question);
     }

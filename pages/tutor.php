@@ -90,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
 
         if ($sourcemode === 'selected' && empty($selectedmaterials)) {
-            $error = 'Select at least one material allowed for the current AI provider, or choose Question/topic only.';
+            $error = 'Select at least one course material allowed for the current AI provider.';
         }
 
         if ($error === '') {
@@ -132,7 +132,7 @@ echo html_writer::tag('h2', 'AI Tutor');
 
 echo html_writer::tag(
     'p',
-    'Ask a free question, or select exactly which Moodle course materials the AI can use.',
+    'Ask a question grounded only on the selected Moodle course materials.',
     ['class' => 'lead']
 );
 
@@ -383,3 +383,4 @@ function local_aiskillnavigator_tutor_signal_capture_assets(int $courseid): stri
 </script>
 HTML;
 }
+

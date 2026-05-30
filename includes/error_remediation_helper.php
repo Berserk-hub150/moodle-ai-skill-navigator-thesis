@@ -141,10 +141,10 @@ function local_aiskillnavigator_error_remediation_card(
 
     $wronganswer = $options[$selectedanswer] ?? 'Risposta selezionata';
     $correctanswer = $options[$correctindex] ?? 'Risposta corretta';
-    $skill = trim((string)($question['skill'] ?? 'Competenza non specificata'));
+    $skill = trim((string)($question['skill'] ?? 'Ability not specified'));
     $explanation = trim((string)($question['explanation'] ?? ''));
 
-    $concept = $skill !== '' && $skill !== 'Competenza non specificata' ? $skill : $questiontext;
+    $concept = $skill !== '' && $skill !== 'Ability not specified' ? $skill : $questiontext;
     $query = trim($topic . ' ' . $concept . ' spiegazione video tutorial esempio didattico');
 
     if (core_text::strlen($query) > 240) {
@@ -161,7 +161,7 @@ function local_aiskillnavigator_error_remediation_card(
     $html .= html_writer::start_div('aisn-remediation-grid');
 
     $html .= html_writer::div(
-        html_writer::tag('strong', 'Competenza coinvolta') . '<br>' . s($skill),
+        html_writer::tag('strong', 'Ability involved') . '<br>' . s($skill),
         'aisn-remediation-chip'
     );
 
@@ -180,7 +180,7 @@ function local_aiskillnavigator_error_remediation_card(
     if ($explanation !== '') {
         $html .= html_writer::tag(
             'p',
-            html_writer::tag('strong', 'Perché hai sbagliato: ') . s($explanation),
+            html_writer::tag('strong', 'PerchÃ© hai sbagliato: ') . s($explanation),
             ['class' => 'mt-3 mb-2']
         );
     }
@@ -213,8 +213,8 @@ function local_aiskillnavigator_error_remediation_card(
     }
 
     $html .= html_writer::div(
-        html_writer::tag('strong', 'Mini-attività di recupero: ') .
-        'guarda la risorsa consigliata, poi rispondi di nuovo spiegando in 3 righe perché la risposta corretta è "' .
+        html_writer::tag('strong', 'Mini-attivitÃ  di recupero: ') .
+        'guarda la risorsa consigliata, poi rispondi di nuovo spiegando in 3 righe perchÃ© la risposta corretta Ã¨ "' .
         s($correctanswer) . '".',
         'aisn-remediation-activity'
     );

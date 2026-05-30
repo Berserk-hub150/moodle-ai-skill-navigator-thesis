@@ -116,7 +116,7 @@ function local_aiskillnavigator_assessment_card(stdClass $assessment, ?stdClass 
         $meta[] = 'Focus: ' . $focus;
     }
 
-    $html .= html_writer::tag('p', s(implode(' Ã‚Â· ', $meta)), ['class' => 'text-muted']);
+    $html .= html_writer::tag('p', s(implode(' · ', $meta)), ['class' => 'text-muted']);
 
     if ($attempt) {
         $html .= html_writer::div(

@@ -4,6 +4,9 @@ namespace local_aiskillnavigator\service;
 
 defined('MOODLE_INTERNAL') || die();
 
+global $CFG;
+require_once($CFG->dirroot . '/local/aiskillnavigator/includes/pdf_text_extractor.php');
+
 class material_extractor {
     public static function extract_from_upload(array $file): array {
         $path = (string)($file['tmp_name'] ?? '');
@@ -125,25 +128,26 @@ class material_extractor {
     }
 
     private static function extract_pdf(string $path, string $name): array {
-        $pdftotext = trim((string)@shell_exec('command -v pdftotext 2>/dev/null'));
+        $text = \local_aiskillnavigator_extract_pdf_text_from_path($path, $name);
+        $text = self::limit(self::clean($text));
 
-        if ($pdftotext === '') {
+        if ($text === '') {
             return [
                 'success' => false,
                 'content' => '',
-                'message' => 'PDF detected, but pdftotext is not installed in the server/container. Convert to TXT/DOCX or install poppler-utils.',
+                'message' => 'No readable text found in PDF. If it is scanned, check OCR quality or try a clearer scan.',
                 'type' => 'pdf',
             ];
         }
 
-        $command = escapeshellcmd($pdftotext) . ' -layout ' . escapeshellarg($path) . ' - 2>/dev/null';
-        $text = (string)@shell_exec($command);
-        $text = self::limit(self::clean($text));
-
-        return $text !== ''
-            ? ['success' => true, 'content' => $text, 'message' => 'PDF file extracted successfully.', 'type' => 'pdf']
-            : ['success' => false, 'content' => '', 'message' => 'No readable text found in PDF: ' . $name, 'type' => 'pdf'];
+        return [
+            'success' => true,
+            'content' => $text,
+            'message' => 'PDF extracted successfully. Text layer and OCR fallback are supported.',
+            'type' => 'pdf',
+        ];
     }
+
 
     private static function clean(string $text): string {
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');

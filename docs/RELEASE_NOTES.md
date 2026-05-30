@@ -1,4 +1,4 @@
-﻿# v1.0.0 Thesis Prototype
+# v1.0.0 Thesis Prototype
 
 First public thesis prototype of AI Skill Navigator.
 
