@@ -9,3 +9,5 @@ Thumbs.db
 node_modules/
 vendor/
 .env
+
+*.bak*
