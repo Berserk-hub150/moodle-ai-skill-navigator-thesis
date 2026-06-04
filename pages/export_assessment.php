@@ -62,6 +62,8 @@ $delimiter = ',';
 header('Content-Type: text/csv; charset=utf-8');
 header('Content-Disposition: attachment; filename="' . $filenamebase . ($format === 'google' ? '_google_forms.csv' : '.csv') . '"');
 
+// AISN_CSV_UTF8_BOM
+echo "xEFxBBxBF";
 $out = fopen('php://output', 'w');
 
 if ($format === 'google') {
@@ -76,7 +78,7 @@ foreach (array_values($quiz['questions']) as $question) {
     $correct = isset($question['correct_index']) ? (int)$question['correct_index'] : 0;
     $correctanswer = $options[$correct] ?? '';
     $explanation = (string)($question['explanation'] ?? '');
-    $skill = (string)($question['skill'] ?? '');
+    $skill = (string)($question['skill'] ?? $question['ability'] ?? $question['Ability'] ?? '');
 
     while (count($options) < 4) {
         $options[] = '';

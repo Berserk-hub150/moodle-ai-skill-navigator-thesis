@@ -157,6 +157,75 @@ $settings->add(new admin_setting_configtext(
     PARAM_RAW_TRIMMED
 ));
 
+
+
+$settings->add(new admin_setting_heading(
+    'local_aiskillnavigator/ocrheading',
+    'Local OCR extraction',
+    'Local OCR lets the plugin read scanned PDFs and images embedded in PPTX/DOCX. It uses local Tesseract/Poppler tools inside the server/container, not an external API.'
+));
+
+$settings->add(new admin_setting_configcheckbox(
+    'local_aiskillnavigator/enablelocalocr',
+    'Enable local OCR',
+    'When enabled, scanned PDFs, direct image files, and images embedded in PPTX/DOCX are processed with local OCR when possible.',
+    1
+));
+
+$settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/ocrlanguages',
+    'OCR languages',
+    'Tesseract language codes. Recommended for Italian courses: ita+eng.',
+    'ita+eng',
+    PARAM_TEXT
+));
+
+$settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/ocrmaximages',
+    'Maximum images OCR per document',
+    'Upper bound for images extracted from PPTX/DOCX. Higher values are slower.',
+    '120',
+    PARAM_INT
+));
+
+$settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/ocrmaximagebytes',
+    'Maximum image size for OCR in bytes',
+    'Images larger than this are skipped to avoid timeouts. Default: 18 MB.',
+    '18874368',
+    PARAM_INT
+));
+
+
+$settings->add(new admin_setting_heading(
+    'local_aiskillnavigator/productionheading',
+    'Production safety',
+    'Safety gates for real course usage. Keep destructive actions disabled unless testing on a copied course.'
+));
+
+$settings->add(new admin_setting_configcheckbox(
+    'local_aiskillnavigator/externalaiapproved',
+    'Approve external AI for teacher materials',
+    'If disabled, course materials are never sent to external AI providers. Local/prototype providers are unaffected. Per-material teacher approval is still required when this is enabled.',
+    0
+));
+
+$settings->add(new admin_setting_configcheckbox(
+    'local_aiskillnavigator/allowdestructivecoursebuilder',
+    'Allow destructive AI Course Builder actions',
+    'If disabled, AI Course Builder can create sections and attach files, but cannot rename, hide, move, duplicate or delete existing sections.',
+    0
+));
+
+$settings->add(new admin_setting_configtext(
+    'local_aiskillnavigator/maxuploadbytes',
+    'Maximum teacher material upload size in bytes',
+    'Default production limit is 25 MB. Increase only if your PHP/Moodle upload limits and server memory allow it.',
+    '167772160',
+    PARAM_INT
+));
+
+
 $settings->add(new admin_setting_heading(
     'local_aiskillnavigator/searchheading',
     'Live web search',

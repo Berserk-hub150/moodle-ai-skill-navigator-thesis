@@ -1,6 +1,7 @@
 <?php
 
 defined('MOODLE_INTERNAL') || die();
+require_once(__DIR__ . '/saved_simulation_helper.php');
 
 require_once(__DIR__ . '/course_resource_sync.php');
 require_once(__DIR__ . '/material_ai_policy.php');
@@ -10,30 +11,98 @@ function local_aisn_sim_table_exists(string $name): bool {
     return $DB->get_manager()->table_exists(new xmldb_table($name));
 }
 
+
+function local_aisn_sim_field_exists(string $fieldname): bool {
+    global $DB;
+
+    static $cache = [];
+
+    if (array_key_exists($fieldname, $cache)) {
+        return $cache[$fieldname];
+    }
+
+    try {
+        $cache[$fieldname] = $DB->get_manager()->field_exists(
+            new xmldb_table('local_aiskillnav_sim'),
+            new xmldb_field($fieldname)
+        );
+    } catch (Throwable $e) {
+        debugging('AI Skill Navigator sim field check failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        $cache[$fieldname] = false;
+    }
+
+    return $cache[$fieldname];
+}
+
+function local_aisn_sim_add_field_if_missing(xmldb_table $table, xmldb_field $field): void {
+    global $DB;
+
+    $dbman = $DB->get_manager();
+
+    if (!$dbman->field_exists($table, $field)) {
+        $dbman->add_field($table, $field);
+    }
+}
+
+function local_aisn_sim_material_cmid(stdClass $material): int {
+    if (isset($material->sourcecmid) && (int)$material->sourcecmid > 0) {
+        return (int)$material->sourcecmid;
+    }
+
+    if (function_exists('local_aisn_course_cm_id_from_material_title')) {
+        return local_aisn_course_cm_id_from_material_title((string)($material->title ?? ''));
+    }
+
+    if (preg_match('/^\[Course #[0-9]+ \/ cm #([0-9]+)\]/', (string)($material->title ?? ''), $matches)) {
+        return (int)$matches[1];
+    }
+
+    return 0;
+}
+
 function local_aisn_sim_ensure_table(): void {
     global $DB;
 
     $dbman = $DB->get_manager();
     $table = new xmldb_table('local_aiskillnav_sim');
 
-    if ($dbman->table_exists($table)) {
+    if (!$dbman->table_exists($table)) {
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+        $table->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('materialid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+        $table->add_field('topic', XMLDB_TYPE_CHAR, '255', null, null, null, '');
+        $table->add_field('level', XMLDB_TYPE_CHAR, '40', null, null, null, '');
+        $table->add_field('title', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, '');
+        $table->add_field('url', XMLDB_TYPE_TEXT, null, null, null, null, null);
+        $table->add_field('description', XMLDB_TYPE_TEXT, null, null, null, null, null);
+        $table->add_field('source', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, 'ai_generated');
+        $table->add_field('materialids', XMLDB_TYPE_TEXT, null, null, null, null);
+        $table->add_field('materialtitles', XMLDB_TYPE_TEXT, null, null, null, null);
+        $table->add_field('resulttext', XMLDB_TYPE_TEXT, null, null, null, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_index('courseid_idx', XMLDB_INDEX_NOTUNIQUE, ['courseid']);
+        $table->add_index('material_idx', XMLDB_INDEX_NOTUNIQUE, ['materialid']);
+        $dbman->create_table($table);
         return;
     }
 
-    $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
-    $table->add_field('courseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-    $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-    $table->add_field('topic', XMLDB_TYPE_CHAR, '255', null, null, null, '');
-    $table->add_field('level', XMLDB_TYPE_CHAR, '40', null, null, null, '');
-    $table->add_field('materialids', XMLDB_TYPE_TEXT, null, null, null, null);
-    $table->add_field('materialtitles', XMLDB_TYPE_TEXT, null, null, null, null);
-    $table->add_field('resulttext', XMLDB_TYPE_TEXT, null, null, null, null);
-    $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-
-    $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
-    $table->add_index('courseid_idx', XMLDB_INDEX_NOTUNIQUE, ['courseid']);
-
-    $dbman->create_table($table);
+    // Upgrade old ad-hoc simulator tables to the superset expected by this helper.
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'courseid'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('materialid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'userid'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('topic', XMLDB_TYPE_CHAR, '255', null, null, null, '', 'materialid'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('level', XMLDB_TYPE_CHAR, '40', null, null, null, '', 'topic'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('title', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, '', 'level'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('url', XMLDB_TYPE_TEXT, null, null, null, null, null, 'title'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('description', XMLDB_TYPE_TEXT, null, null, null, null, null, 'url'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('source', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, 'ai_generated', 'description'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('materialids', XMLDB_TYPE_TEXT, null, null, null, null, null, 'source'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('materialtitles', XMLDB_TYPE_TEXT, null, null, null, null, null, 'materialids'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('resulttext', XMLDB_TYPE_TEXT, null, null, null, null, null, 'materialtitles'));
+    local_aisn_sim_add_field_if_missing($table, new xmldb_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'timecreated'));
 }
 
 function local_aisn_sim_selected_ids(): array {
@@ -85,7 +154,7 @@ function local_aisn_sim_get_course_materials(int $courseid): array {
     }
 
     if (function_exists('local_aiskillnavigator_sync_course_resources')) {
-        local_aiskillnavigator_sync_course_resources($courseid, 0, true);
+        local_aiskillnavigator_sync_course_resources($courseid, 0, false);
     }
 
     $records = $DB->get_records('local_aiskillnav_material', [
@@ -97,13 +166,11 @@ function local_aisn_sim_get_course_materials(int $courseid): array {
     $visible = [];
 
     foreach ($records as $record) {
-        $title = (string)($record->title ?? '');
+        $cmid = local_aisn_sim_material_cmid($record);
 
-        if (!preg_match('/^\[Course #([0-9]+) \/ cm #([0-9]+)\]/', $title, $matches)) {
+        if ($cmid <= 0) {
             continue;
         }
-
-        $cmid = (int)$matches[2];
 
         if (empty($modinfo->cms[$cmid]) || empty($modinfo->cms[$cmid]->visible)) {
             continue;
@@ -113,10 +180,25 @@ function local_aisn_sim_get_course_materials(int $courseid): array {
             continue;
         }
 
-        $visible[(int)$record->id] = $record;
+        if (!isset($visible[$cmid])) {
+            $visible[$cmid] = $record;
+            continue;
+        }
+
+        $currentlen = core_text::strlen((string)($visible[$cmid]->content ?? ''));
+        $newlen = core_text::strlen((string)($record->content ?? ''));
+
+        if ($newlen > $currentlen) {
+            $visible[$cmid] = $record;
+        }
     }
 
-    return $visible;
+    $out = [];
+    foreach ($visible as $record) {
+        $out[(int)$record->id] = $record;
+    }
+
+    return $out;
 }
 
 function local_aisn_sim_selected_materials(int $courseid, array $ids): array {
@@ -135,13 +217,26 @@ function local_aisn_sim_selected_materials(int $courseid, array $ids): array {
 function local_aisn_sim_material_context(int $courseid, array $ids): string {
     $selected = local_aisn_sim_selected_materials($courseid, $ids);
     $parts = [];
+    $seen = [];
 
     foreach ($selected as $material) {
+        $cmid = local_aisn_sim_material_cmid($material);
+        $key = $cmid > 0 ? 'cm:' . $cmid : 'id:' . (int)$material->id;
+
+        if (isset($seen[$key])) {
+            continue;
+        }
+
+        $seen[$key] = true;
         $title = local_aisn_sim_clean_title((string)$material->title);
         $content = trim((string)$material->content);
 
         if ($content === '') {
             continue;
+        }
+
+        if (core_text::strlen($content) > 5000) {
+            $content = core_text::substr($content, 0, 5000) . "\n[Material truncated]";
         }
 
         $parts[] = "MATERIALE: " . $title . "\n" . $content;
@@ -177,13 +272,29 @@ function local_aisn_sim_require_materials_for_post(int $courseid): void {
         );
     }
 
-    $addition = "\n\nSelected Moodle course materials:\n" . $context;
-
-    foreach (['notes', 'material', 'materials', 'teacher_notes', 'context', 'constraints'] as $key) {
-        $current = isset($_POST[$key]) ? (string)$_POST[$key] : '';
-        $_POST[$key] = trim($current . $addition);
-        $_REQUEST[$key] = $_POST[$key];
+    if (!empty($_POST['aisn_selected_material_context_added'])) {
+        return;
     }
+
+    $addition = "\n\nSelected Moodle course materials:\n" . $context;
+    $targetkey = 'materials';
+
+    foreach (['materials', 'material', 'teacher_notes', 'notes', 'context', 'constraints'] as $candidate) {
+        if (isset($_POST[$candidate]) && trim((string)$_POST[$candidate]) !== '') {
+            $targetkey = $candidate;
+            break;
+        }
+    }
+
+    $current = isset($_POST[$targetkey]) ? (string)$_POST[$targetkey] : '';
+
+    if (strpos($current, 'Selected Moodle course materials:') === false) {
+        $_POST[$targetkey] = trim($current . $addition);
+        $_REQUEST[$targetkey] = $_POST[$targetkey];
+    }
+
+    $_POST['aisn_selected_material_context_added'] = '1';
+    $_REQUEST['aisn_selected_material_context_added'] = '1';
 }
 
 function local_aisn_sim_material_selector_html(int $courseid): string {
@@ -483,54 +594,10 @@ function local_aisn_sim_saved_link_html(int $courseid): string {
 }
 
 function local_aisn_sim_prepare_capture(int $courseid): void {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        return;
-    }
-
-    if (defined('LOCAL_AISN_SIM_CAPTURE_STARTED')) {
-        return;
-    }
-
-    define('LOCAL_AISN_SIM_CAPTURE_STARTED', true);
-
-    ob_start();
-
-    register_shutdown_function(function() use ($courseid) {
-        global $USER;
-
-        $html = ob_get_contents();
-
-        if ($html === false || trim($html) === '') {
-            return;
-        }
-
-        $text = trim(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-        $text = preg_replace('/\s{3,}/', "\n\n", $text);
-
-        if ($text === '') {
-            return;
-        }
-
-        $topic = optional_param('topic', '', PARAM_TEXT);
-        $level = optional_param('level', '', PARAM_TEXT);
-        $ids = local_aisn_sim_selected_ids();
-        $materials = local_aisn_sim_selected_materials($courseid, $ids);
-        $titles = [];
-
-        foreach ($materials as $material) {
-            $titles[] = local_aisn_sim_clean_title((string)$material->title);
-        }
-
-        local_aisn_sim_save_generated(
-            $courseid,
-            (int)$USER->id,
-            $topic,
-            $level,
-            $ids,
-            $titles,
-            $text
-        );
-    });
+    // The previous implementation captured the whole rendered Moodle page at shutdown.
+    // That stored navigation, CSS and JavaScript inside saved simulations.
+    // Saving is now explicit in simulator_finder.php after the AI result is generated.
+    return;
 }
 
 function local_aisn_sim_save_generated(
@@ -544,18 +611,233 @@ function local_aisn_sim_save_generated(
 ): void {
     global $DB;
 
+    if (function_exists('local_aisn_sim_clean_generated_result')) {
+        $resulttext = local_aisn_sim_clean_generated_result($resulttext);
+    }
+
+    $resulttext = trim($resulttext);
+    if ($resulttext === '') {
+        return;
+    }
+
     local_aisn_sim_ensure_table();
 
+    $now = time();
     $record = new stdClass();
     $record->courseid = $courseid;
-    $record->userid = $userid;
-    $record->topic = core_text::substr($topic, 0, 255);
-    $record->level = core_text::substr($level, 0, 40);
-    $record->materialids = json_encode(array_values($materialids));
-    $record->materialtitles = json_encode(array_values($materialtitles), JSON_UNESCAPED_UNICODE);
-    $record->resulttext = core_text::substr($resulttext, 0, 65000);
-    $record->timecreated = time();
 
-    $DB->insert_record('local_aiskillnav_sim', $record);
+    if (local_aisn_sim_field_exists('userid')) {
+        $record->userid = $userid;
+    }
+
+    if (local_aisn_sim_field_exists('materialid')) {
+        $record->materialid = !empty($materialids) ? (int)reset($materialids) : null;
+    }
+
+    if (local_aisn_sim_field_exists('topic')) {
+        $record->topic = core_text::substr($topic, 0, 255);
+    }
+
+    if (local_aisn_sim_field_exists('level')) {
+        $record->level = core_text::substr($level, 0, 40);
+    }
+
+    if (local_aisn_sim_field_exists('title')) {
+        $record->title = core_text::substr($topic !== '' ? $topic : 'Generated simulator exercise', 0, 255);
+    }
+
+    if (local_aisn_sim_field_exists('url')) {
+        $record->url = '';
+    }
+
+    if (local_aisn_sim_field_exists('description')) {
+        $record->description = core_text::substr($resulttext, 0, 65000);
+    }
+
+    if (local_aisn_sim_field_exists('source')) {
+        $record->source = 'ai_generated';
+    }
+
+    if (local_aisn_sim_field_exists('materialids')) {
+        $record->materialids = json_encode(array_values($materialids));
+    }
+
+    if (local_aisn_sim_field_exists('materialtitles')) {
+        $record->materialtitles = json_encode(array_values($materialtitles), JSON_UNESCAPED_UNICODE);
+    }
+
+    if (local_aisn_sim_field_exists('resulttext')) {
+        $record->resulttext = core_text::substr($resulttext, 0, 65000);
+    }
+
+    $record->timecreated = $now;
+
+    if (local_aisn_sim_field_exists('timemodified')) {
+        $record->timemodified = $now;
+    }
+
+        // AISN_SIM_DEDUPE_SAVE_SAFE_V3
+    if (function_exists('local_aisn_sim_upsert_record')) {
+        local_aisn_sim_upsert_record($record);
+    } else {
+        $DB->insert_record('local_aiskillnav_sim', $record);
+    }
 }
 
+/**
+ * AISN_SIM_DEDUPE_CORE_SAFE_V3
+ * Dedupe sicuro per simulazioni salvate.
+ */
+
+if (!function_exists('local_aisn_sim_dupe_normalize_value')) {
+    function local_aisn_sim_dupe_normalize_value($value, int $max = 12000): string {
+        $text = (string)($value ?? '');
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = strip_tags($text);
+        $text = str_replace(["\r\n", "\r", "\t", "\xC2\xA0"], ' ', $text);
+        $text = preg_replace('/\s+/u', ' ', (string)$text);
+        $text = trim((string)$text);
+
+        if (class_exists('core_text')) {
+            $text = core_text::strtolower($text);
+            if (core_text::strlen($text) > $max) {
+                $text = core_text::substr($text, 0, $max);
+            }
+        } else {
+            $text = strtolower($text);
+            if (strlen($text) > $max) {
+                $text = substr($text, 0, $max);
+            }
+        }
+
+        return trim($text);
+    }
+}
+
+if (!function_exists('local_aisn_sim_dupe_json_key')) {
+    function local_aisn_sim_dupe_json_key($value): string {
+        if (is_array($value)) {
+            $arr = $value;
+        } else {
+            $raw = (string)($value ?? '');
+            $decoded = json_decode($raw, true);
+            $arr = is_array($decoded) ? $decoded : [$raw];
+        }
+
+        $arr = array_map(static function($item): string {
+            return trim((string)$item);
+        }, $arr);
+
+        $arr = array_values(array_filter($arr, static function($item): bool {
+            return $item !== '';
+        }));
+
+        sort($arr, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return implode('|', $arr);
+    }
+}
+
+if (!function_exists('local_aisn_sim_record_signature')) {
+    function local_aisn_sim_record_signature(stdClass $record): string {
+        $courseid = (int)($record->courseid ?? 0);
+        $userid = (int)($record->userid ?? 0);
+
+        $topic = local_aisn_sim_dupe_normalize_value((string)($record->topic ?? $record->title ?? ''), 600);
+        $level = local_aisn_sim_dupe_normalize_value((string)($record->level ?? ''), 80);
+
+        $materialkey = '';
+        if (isset($record->materialids) && trim((string)$record->materialids) !== '') {
+            $materialkey = local_aisn_sim_dupe_json_key($record->materialids);
+        } else if (isset($record->materialtitles) && trim((string)$record->materialtitles) !== '') {
+            $materialkey = local_aisn_sim_dupe_json_key($record->materialtitles);
+        }
+
+        $result = '';
+        if (isset($record->resulttext) && trim((string)$record->resulttext) !== '') {
+            $result = (string)$record->resulttext;
+        } else if (isset($record->description) && trim((string)$record->description) !== '') {
+            $result = (string)$record->description;
+        }
+
+        $resultkey = local_aisn_sim_dupe_normalize_value($result, 16000);
+
+        return sha1(json_encode([
+            'courseid' => $courseid,
+            'userid' => $userid,
+            'topic' => $topic,
+            'level' => $level,
+            'materials' => $materialkey,
+            'result' => $resultkey,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+}
+
+if (!function_exists('local_aisn_sim_unique_records')) {
+    function local_aisn_sim_unique_records(array $records): array {
+        $seen = [];
+        $out = [];
+
+        foreach ($records as $key => $record) {
+            if (!is_object($record)) {
+                continue;
+            }
+
+            $sig = local_aisn_sim_record_signature($record);
+
+            if (isset($seen[$sig])) {
+                continue;
+            }
+
+            $seen[$sig] = true;
+            $out[$key] = $record;
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('local_aisn_sim_upsert_record')) {
+    function local_aisn_sim_upsert_record(stdClass $record): int {
+        global $DB;
+
+        $courseid = (int)($record->courseid ?? 0);
+
+        if ($courseid <= 0) {
+            return (int)$DB->insert_record('local_aiskillnav_sim', $record);
+        }
+
+        $sig = local_aisn_sim_record_signature($record);
+        $existing = $DB->get_records('local_aiskillnav_sim', ['courseid' => $courseid], 'timecreated DESC, id DESC');
+        $matches = [];
+
+        foreach ($existing as $old) {
+            if (local_aisn_sim_record_signature($old) === $sig) {
+                $matches[] = (int)$old->id;
+            }
+        }
+
+        if (!empty($matches)) {
+            $keepid = (int)$matches[0];
+            $record->id = $keepid;
+
+            if (isset($record->timecreated)) {
+                unset($record->timecreated);
+            }
+
+            if (function_exists('local_aisn_sim_field_exists') && local_aisn_sim_field_exists('timemodified')) {
+                $record->timemodified = time();
+            }
+
+            $DB->update_record('local_aiskillnav_sim', $record);
+
+            foreach (array_slice($matches, 1) as $deleteid) {
+                $DB->delete_records('local_aiskillnav_sim', ['id' => (int)$deleteid]);
+            }
+
+            return $keepid;
+        }
+
+        return (int)$DB->insert_record('local_aiskillnav_sim', $record);
+    }
+}

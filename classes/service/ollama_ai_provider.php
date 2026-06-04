@@ -15,7 +15,7 @@ class ollama_ai_provider extends abstract_curl_ai_provider {
     }
 
     public function generate(string $prompt, int $maxtokens = 1200, string $systemprompt = ''): string {
-        $url = str_ends_with($this->endpoint, '/api/chat') ? $this->endpoint : $this->endpoint . '/api/chat';
+        $url = $this->ends_with($this->endpoint, '/api/chat') ? $this->endpoint : $this->endpoint . '/api/chat';
 
         $payload = [
             'model' => $this->model,
@@ -37,5 +37,13 @@ class ollama_ai_provider extends abstract_curl_ai_provider {
         ];
 
         return $this->post_json_and_extract_answer($url, $payload, ['Content-Type: application/json'], 'ollama');
+    }
+
+    private function ends_with(string $haystack, string $needle): bool {
+        if ($needle === '') {
+            return true;
+        }
+
+        return substr($haystack, -strlen($needle)) === $needle;
     }
 }

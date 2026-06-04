@@ -21,6 +21,36 @@ if (!function_exists('local_aiskillnavigator_pdf_clean_text')) {
     }
 }
 
+if (!function_exists('local_aiskillnavigator_pdf_timeout_prefix')) {
+    function local_aiskillnavigator_pdf_timeout_prefix(int $seconds): string {
+        $timeout = local_aiskillnavigator_pdf_tool_path('timeout');
+        return $timeout !== '' ? escapeshellcmd($timeout) . ' ' . (int)$seconds . 's ' : '';
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_pdf_filesize')) {
+    function local_aiskillnavigator_pdf_filesize(string $pdfpath): int {
+        return is_readable($pdfpath) ? (int)@filesize($pdfpath) : 0;
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_pdf_large_threshold')) {
+    function local_aiskillnavigator_pdf_large_threshold(): int {
+        $configured = (int)get_config('local_aiskillnavigator', 'largefilethresholdbytes');
+        if ($configured > 0) {
+            return max(5 * 1024 * 1024, $configured);
+        }
+        return 25 * 1024 * 1024;
+    }
+}
+
+if (!function_exists('local_aiskillnavigator_pdf_is_large')) {
+    function local_aiskillnavigator_pdf_is_large(string $pdfpath): bool {
+        $size = local_aiskillnavigator_pdf_filesize($pdfpath);
+        return $size > 0 && $size >= local_aiskillnavigator_pdf_large_threshold();
+    }
+}
+
 if (!function_exists('local_aiskillnavigator_pdf_text_layer')) {
     function local_aiskillnavigator_pdf_text_layer(string $pdfpath): string {
         $pdftotext = local_aiskillnavigator_pdf_tool_path('pdftotext');
@@ -29,7 +59,9 @@ if (!function_exists('local_aiskillnavigator_pdf_text_layer')) {
             return '';
         }
 
-        $cmd = escapeshellcmd($pdftotext)
+        $seconds = local_aiskillnavigator_pdf_is_large($pdfpath) ? 35 : 60;
+        $cmd = local_aiskillnavigator_pdf_timeout_prefix($seconds)
+            . escapeshellcmd($pdftotext)
             . ' -enc UTF-8 -layout '
             . escapeshellarg($pdfpath)
             . ' - 2>/dev/null';
@@ -46,7 +78,9 @@ if (!function_exists('local_aiskillnavigator_pdf_page_count')) {
             return 0;
         }
 
-        $out = (string)@shell_exec(escapeshellcmd($pdfinfo) . ' ' . escapeshellarg($pdfpath) . ' 2>/dev/null');
+        $cmd = local_aiskillnavigator_pdf_timeout_prefix(10)
+            . escapeshellcmd($pdfinfo) . ' ' . escapeshellarg($pdfpath) . ' 2>/dev/null';
+        $out = (string)@shell_exec($cmd);
 
         if (preg_match('/Pages:\s+([0-9]+)/i', $out, $m)) {
             return (int)$m[1];
@@ -56,8 +90,32 @@ if (!function_exists('local_aiskillnavigator_pdf_page_count')) {
     }
 }
 
+if (!function_exists('local_aiskillnavigator_pdf_ocr_allowed')) {
+    function local_aiskillnavigator_pdf_ocr_allowed(string $pdfpath): bool {
+        if (function_exists('local_aisn_ocr_enabled') && !local_aisn_ocr_enabled()) {
+            return false;
+        }
+
+        if (local_aiskillnavigator_pdf_is_large($pdfpath)) {
+            return false;
+        }
+
+        $pages = local_aiskillnavigator_pdf_page_count($pdfpath);
+        $maxpages = (int)get_config('local_aiskillnavigator', 'pdfocrmaxpages');
+        if ($maxpages <= 0) {
+            $maxpages = 12;
+        }
+
+        return $pages <= 0 || $pages <= $maxpages;
+    }
+}
+
 if (!function_exists('local_aiskillnavigator_pdf_ocr')) {
     function local_aiskillnavigator_pdf_ocr(string $pdfpath): string {
+        if (!local_aiskillnavigator_pdf_ocr_allowed($pdfpath)) {
+            return '';
+        }
+
         $pdftoppm = local_aiskillnavigator_pdf_tool_path('pdftoppm');
         $tesseract = local_aiskillnavigator_pdf_tool_path('tesseract');
 
@@ -69,11 +127,15 @@ if (!function_exists('local_aiskillnavigator_pdf_ocr')) {
         $prefix = $tmpdir . '/page';
 
         $pages = local_aiskillnavigator_pdf_page_count($pdfpath);
-        $maxpages = 80;
+        $maxpages = (int)get_config('local_aiskillnavigator', 'pdfocrmaxpages');
+        if ($maxpages <= 0) {
+            $maxpages = 12;
+        }
         $lastpage = $pages > 0 ? min($pages, $maxpages) : $maxpages;
 
-        $rendercmd = escapeshellcmd($pdftoppm)
-            . ' -r 180 -png -f 1 -l ' . (int)$lastpage . ' '
+        $rendercmd = local_aiskillnavigator_pdf_timeout_prefix(35)
+            . escapeshellcmd($pdftoppm)
+            . ' -r 150 -png -f 1 -l ' . (int)$lastpage . ' '
             . escapeshellarg($pdfpath)
             . ' '
             . escapeshellarg($prefix)
@@ -85,12 +147,19 @@ if (!function_exists('local_aiskillnavigator_pdf_ocr')) {
         sort($images, SORT_NATURAL);
 
         $parts = [];
+        $lang = function_exists('get_config') ? trim((string)get_config('local_aiskillnavigator', 'ocrlanguages')) : '';
+        if ($lang === '') {
+            $lang = 'ita+eng';
+        }
 
         foreach ($images as $image) {
-            $ocrcmd = escapeshellcmd($tesseract)
+            $ocrcmd = local_aiskillnavigator_pdf_timeout_prefix(20)
+                . escapeshellcmd($tesseract)
                 . ' '
                 . escapeshellarg($image)
-                . ' stdout -l ita+eng --psm 6 2>/dev/null';
+                . ' stdout -l '
+                . escapeshellarg($lang)
+                . ' --psm 6 2>/dev/null';
 
             $txt = local_aiskillnavigator_pdf_clean_text((string)@shell_exec($ocrcmd));
 
@@ -113,9 +182,15 @@ if (!function_exists('local_aiskillnavigator_extract_pdf_text_from_path')) {
             return '';
         }
 
+        // Always prefer fast text-layer extraction. This is the PDF -> TXT path.
         $textlayer = local_aiskillnavigator_pdf_text_layer($pdfpath);
 
         if (core_text::strlen($textlayer) >= 80) {
+            return $textlayer;
+        }
+
+        // Large PDFs are never OCRed during Course Builder/material sync: they stay fast.
+        if (local_aiskillnavigator_pdf_is_large($pdfpath)) {
             return $textlayer;
         }
 

@@ -1,53 +1,127 @@
-.aisn-marked-output {
+.aisn-rendered-answer {
     line-height: 1.65;
     font-size: 1rem;
 }
 
-.aisn-marked-output table {
+.aisn-rendered-answer p {
+    margin: 0 0 12px;
+}
+
+.aisn-used-materials {
+    color: #64748b;
+    margin: 0 0 12px;
+}
+
+.aisn-table-wrap {
+    overflow-x: auto;
+    margin: 14px 0 18px;
+}
+
+.aisn-rendered-answer table {
     border-collapse: collapse;
     width: auto;
     max-width: 100%;
-    margin: 14px 0;
-    background: #fff;
+    background: #ffffff;
+    margin: 0;
 }
 
-.aisn-marked-output th,
-.aisn-marked-output td {
-    border: 1px solid #d6d6d6;
+.aisn-rendered-answer th,
+.aisn-rendered-answer td {
+    border: 1px solid #d0d7de;
     padding: 9px 13px;
     text-align: left;
     vertical-align: top;
 }
 
-.aisn-marked-output th {
-    background: #f3f4f6;
+.aisn-rendered-answer th {
+    background: #f6f8fa;
     font-weight: 800;
 }
 
-.aisn-marked-output tr:nth-child(even) td {
-    background: #fafafa;
+.aisn-rendered-answer tr:nth-child(even) td {
+    background: #fbfbfb;
 }
 
-.aisn-marked-output pre {
-    background: #111827;
-    color: #f9fafb;
-    border-radius: 10px;
-    padding: 12px;
-    overflow-x: auto;
+.aisn-rendered-answer ul,
+.aisn-rendered-answer ol {
+    margin: 8px 0 14px 24px;
 }
 
-.aisn-marked-output code {
+.aisn-rendered-answer li {
+    margin-bottom: 5px;
+}
+
+.aisn-inline-code {
     background: #f3f4f6;
     border-radius: 5px;
     padding: 2px 5px;
+    font-family: Consolas, Monaco, "Courier New", monospace;
 }
 
-.aisn-marked-output pre code {
+.aisn-code-editor {
+    margin: 14px 0 16px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #2f2f2f;
+    border: 1px solid #4b5563;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .16);
+}
+
+.aisn-code-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: #252525;
+    color: #ffffff;
+    padding: 9px 14px;
+    font-weight: 800;
+}
+
+.aisn-code-lang-label {
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.aisn-copy-btn {
+    border: 1px solid #52525b;
+    background: #3f3f46;
+    color: #f8fafc;
+    border-radius: 7px;
+    padding: 4px 10px;
+    font-size: .82rem;
+    cursor: pointer;
+}
+
+.aisn-copy-btn:hover {
+    background: #52525b;
+}
+
+.aisn-code-editor pre {
+    margin: 0;
+    background: #343434;
+    color: #f8fafc;
+    padding: 13px 16px;
+    overflow-x: auto;
+    font-family: Consolas, Monaco, "Courier New", monospace;
+    font-size: .95rem;
+    line-height: 1.42;
+}
+
+.aisn-code-editor code {
     background: transparent;
+    color: inherit;
     padding: 0;
+    white-space: pre;
 }
 
-.aisn-used-materials {
-    color: #64748b;
-    margin-bottom: 12px;
+.aisn-math-block {
+    background: #f8fafc;
+    border: 1px solid #d0d7de;
+    border-left: 5px solid #0f6cbf;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin: 12px 0 16px;
+    overflow-x: auto;
+    max-width: 100%;
 }

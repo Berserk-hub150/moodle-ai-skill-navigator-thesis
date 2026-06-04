@@ -8,14 +8,18 @@ defined('MOODLE_INTERNAL') || die();
 class model_output_cleaner {
     public function clean(string $text): string {
         $text = trim($text);
+        $text = preg_replace('/^\xEF\xBB\xBF/', '', $text);
 
-        if (str_starts_with($text, '```json')) {
-            $text = trim(substr($text, 7));
-        } else if (str_starts_with($text, '```')) {
-            $text = trim(substr($text, 3));
+        if (preg_match('/^```[a-zA-Z0-9_-]*\s*(.*?)\s*```$/s', $text, $matches)) {
+            return trim((string) $matches[1]);
         }
 
-        if (str_ends_with($text, '```')) {
+        if (substr($text, 0, 3) === '```') {
+            $text = trim(substr($text, 3));
+            $text = preg_replace('/^[a-zA-Z0-9_-]+\s*\n/', '', $text);
+        }
+
+        if (substr($text, -3) === '```') {
             $text = trim(substr($text, 0, -3));
         }
 

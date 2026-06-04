@@ -1,8 +1,10 @@
 <?php
 
 defined('MOODLE_INTERNAL') || die();
+require_once(__DIR__ . '/production_guard.php');
 
 require_once(__DIR__ . '/material_ai_policy.php');
+require_once(__DIR__ . '/material_exclusion_helper.php');
 
 if (!function_exists('local_aiskillnavigator_current_ai_is_local')) {
     function local_aiskillnavigator_current_ai_is_local(): bool {
@@ -17,10 +19,10 @@ if (!function_exists('local_aiskillnavigator_current_ai_is_local')) {
             return true;
         }
 
-        return str_contains($endpoint, 'localhost')
-            || str_contains($endpoint, '127.0.0.1')
-            || str_contains($endpoint, 'host.docker.internal')
-            || str_contains($endpoint, '::1');
+        return strpos($endpoint, 'localhost') !== false
+            || strpos($endpoint, '127.0.0.1') !== false
+            || strpos($endpoint, 'host.docker.internal') !== false
+            || strpos($endpoint, '::1') !== false;
     }
 }
 
@@ -90,8 +92,8 @@ if (!function_exists('local_aiskillnavigator_material_source_duplicate_key')) {
 function local_aiskillnavigator_material_source_is_prompt_generated(stdClass $material): bool {
     $title = strtolower((string)($material->title ?? ''));
 
-    return str_contains($title, 'prompt-to-moodle')
-        || str_contains($title, 'prompt to moodle');
+    return strpos($title, 'prompt-to-moodle') !== false
+        || strpos($title, 'prompt to moodle') !== false;
 }
 
 function local_aiskillnavigator_material_source_clean_course_title(string $title): string {
@@ -187,8 +189,8 @@ if (!function_exists('local_aiskillnavigator_material_source_normalize_title_for
 function local_aisn_matlist_is_prompt(stdClass $material): bool {
     $title = strtolower((string)($material->title ?? ''));
 
-    return str_contains($title, 'prompt-to-moodle')
-        || str_contains($title, 'prompt to moodle');
+    return strpos($title, 'prompt-to-moodle') !== false
+        || strpos($title, 'prompt to moodle') !== false;
 }
 
 function local_aisn_matlist_clean_title(string $title): string {
@@ -233,20 +235,42 @@ function local_aisn_matlist_body_hash(stdClass $material): string {
     return sha1(strtolower(core_text::substr($content, 0, 12000)));
 }
 
+
+function local_aisn_matlist_cmid(stdClass $material): int {
+    if (isset($material->sourcecmid) && (int)$material->sourcecmid > 0) {
+        return (int)$material->sourcecmid;
+    }
+
+    if (function_exists('local_aisn_course_cm_id_from_material_title')) {
+        return local_aisn_course_cm_id_from_material_title((string)($material->title ?? ''));
+    }
+
+    if (preg_match('/^\[Course #[0-9]+ \/ cm #([0-9]+)\]/', (string)($material->title ?? ''), $matches)) {
+        return (int)$matches[1];
+    }
+
+    return 0;
+}
+
 function local_aisn_matlist_key(stdClass $material): string {
+    $cmid = local_aisn_matlist_cmid($material);
+    if ($cmid > 0) {
+        return 'cm:' . $cmid;
+    }
+
     $filename = local_aisn_matlist_filename($material);
     if ($filename !== '') {
         return 'file:' . $filename;
     }
 
-    $cleantitle = strtolower(local_aisn_matlist_clean_title((string)($material->title ?? '')));
-    if ($cleantitle !== '') {
-        return 'title:' . $cleantitle;
-    }
-
     $bodyhash = local_aisn_matlist_body_hash($material);
     if ($bodyhash !== '') {
         return 'body:' . $bodyhash;
+    }
+
+    $cleantitle = strtolower(local_aisn_matlist_clean_title((string)($material->title ?? '')));
+    if ($cleantitle !== '') {
+        return 'title:' . $cleantitle;
     }
 
     return 'id:' . (int)($material->id ?? 0);
@@ -329,7 +353,7 @@ function local_aiskillnavigator_material_source_get_readable_materials(int $cour
             'courseid' => $courseid,
             'materialtype' => 'course_resource',
         ],
-        'title ASC'
+        'timemodified DESC, id DESC'
     );
 
     if (empty($records)) {
@@ -337,23 +361,16 @@ function local_aiskillnavigator_material_source_get_readable_materials(int $cour
     }
 
     $modinfo = get_fast_modinfo($courseid);
-    $candidates = [];
+    $bycmid = [];
 
     foreach ($records as $record) {
-        if (trim((string)($record->content ?? '')) === '') {
+        $cmid = local_aisn_matlist_cmid($record);
+
+        if ($cmid <= 0) {
             continue;
         }
 
-        $title = (string)($record->title ?? '');
-
-        if (!preg_match('/^\[Course #([0-9]+) \/ cm #([0-9]+)\]/', $title, $matches)) {
-            continue;
-        }
-
-        $recordcourseid = (int)$matches[1];
-        $cmid = (int)$matches[2];
-
-        if ($recordcourseid !== $courseid || $cmid <= 0) {
+        if (local_aisn_course_material_is_excluded($courseid, $cmid)) {
             continue;
         }
 
@@ -361,61 +378,28 @@ function local_aiskillnavigator_material_source_get_readable_materials(int $cour
             continue;
         }
 
-        $candidates[(int)$record->id] = [
-            'record' => $record,
-            'cmid' => $cmid,
-            'filename' => local_aiskillnavigator_material_source_filename_key($record),
-            'dupekey' => local_aiskillnavigator_material_source_duplicate_key($record),
-            'prompt' => local_aiskillnavigator_material_source_is_prompt_generated($record),
-        ];
-    }
-
-    if (empty($candidates)) {
-        return [];
-    }
-
-    $normalfilenames = [];
-
-    foreach ($candidates as $item) {
-        if ($item['filename'] !== '' && !$item['prompt']) {
-            $normalfilenames[$item['filename']] = true;
-        }
-    }
-
-    uasort($candidates, static function($a, $b) {
-        if ($a['cmid'] !== $b['cmid']) {
-            return $a['cmid'] <=> $b['cmid'];
-        }
-
-        if ($a['prompt'] !== $b['prompt']) {
-            return $a['prompt'] ? 1 : -1;
-        }
-
-        return ((int)$a['record']->id) <=> ((int)$b['record']->id);
-    });
-
-    $readable = [];
-    $seen = [];
-
-    foreach ($candidates as $id => $item) {
-        if ($item['prompt'] && $item['filename'] !== '' && isset($normalfilenames[$item['filename']])) {
+        if (trim((string)($record->content ?? '')) === '') {
             continue;
         }
 
-        $key = $item['dupekey'];
-
-        if ($key !== '') {
-            if (isset($seen[$key])) {
-                continue;
-            }
-
-            $seen[$key] = true;
+        if (!isset($bycmid[$cmid])) {
+            $bycmid[$cmid] = $record;
         }
-
-        $readable[(int)$id] = $item['record'];
     }
 
-    return local_aisn_matlist_dedupe($readable);
+    ksort($bycmid);
+
+    $readable = [];
+
+    foreach ($bycmid as $record) {
+        $readable[(int)$record->id] = $record;
+    }
+
+    if (function_exists('local_aisn_matlist_dedupe')) {
+        return local_aisn_matlist_dedupe($readable);
+    }
+
+    return $readable;
 }
 
 
@@ -453,6 +437,10 @@ function local_aiskillnavigator_material_source_selected_materials(array $readab
         }
     }
 
+    if (function_exists('local_aisn_matlist_dedupe')) {
+        $selected = local_aisn_matlist_dedupe($selected);
+    }
+
     return array_values(array_filter($selected, function($material) {
         return local_aiskillnavigator_material_can_be_sent_to_current_ai($material);
     }));
@@ -488,6 +476,31 @@ function local_aiskillnavigator_material_source_excerpt(string $text, int $limit
     }
 
     return $text;
+}
+
+
+function local_aisn_prod_filter_rag_results_by_ai_policy(array $results, int $courseid): array {
+    if (empty($results)) {
+        return [];
+    }
+
+    $readable = local_aiskillnavigator_material_source_get_readable_materials($courseid);
+    $allowed = [];
+
+    foreach ($readable as $material) {
+        if (local_aiskillnavigator_material_can_be_sent_to_current_ai($material)) {
+            $allowed[(int)$material->id] = true;
+        }
+    }
+
+    if (empty($allowed)) {
+        return [];
+    }
+
+    return array_values(array_filter($results, static function($result) use ($allowed): bool {
+        $materialid = isset($result->materialid) ? (int)$result->materialid : 0;
+        return $materialid > 0 && isset($allowed[$materialid]);
+    }));
 }
 
 function local_aiskillnavigator_material_source_search($embeddingservice, string $query, int $courseid, int $limit, string $sourcemode, array $selectedmaterialids): array {
@@ -529,6 +542,12 @@ function local_aiskillnavigator_material_source_search($embeddingservice, string
         debugging('AI Skill Navigator material source search skipped: ' . $e->getMessage(), DEBUG_DEVELOPER);
         return [];
     }
+
+    if (empty($results)) {
+        return [];
+    }
+
+    $results = local_aisn_prod_filter_rag_results_by_ai_policy($results, $courseid);
 
     if (empty($results)) {
         return [];
@@ -601,13 +620,12 @@ function local_aiskillnavigator_material_source_selector_html(
     string $label = 'Course material',
     string $help = ''
 ): string {
-    if ($materials === null) {
-        $materials = local_aiskillnavigator_material_source_get_readable_materials($courseid);
-    }
+    $readablematerials = local_aisn_matlist_dedupe($readablematerials);
+    $selectedmaterialids = array_values(array_filter($selectedmaterialids, function($id) use ($readablematerials) {
+        return isset($readablematerials[(int)$id]);
+    }));
 
-    $materials = local_aisn_matlist_dedupe($materials);
-
-$sourcemode = 'selected';
+    $sourcemode = 'selected';
 
     $allowedcount = 0;
 

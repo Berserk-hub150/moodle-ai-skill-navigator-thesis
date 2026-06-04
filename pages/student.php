@@ -2,6 +2,7 @@
 // This file is part of Moodle - https://moodle.org/
 
 require_once(__DIR__ . '/../../../config.php');
+require_once(__DIR__ . '/../includes/ui_style_helper.php');
 require_once(__DIR__ . '/../includes/ai_output_formatter.php');
 require_once(__DIR__ . '/../includes/back_to_course_helper.php');
 
@@ -147,6 +148,7 @@ function local_aiskillnavigator_student_status_text(int $percentage): string {
 }
 
 echo $OUTPUT->header();
+local_aiskillnavigator_print_inline_styles();
 
 echo html_writer::start_div('container-fluid');
 

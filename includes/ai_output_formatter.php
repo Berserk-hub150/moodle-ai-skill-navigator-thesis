@@ -285,7 +285,15 @@ CSS;
     }
 
     function formatAnswerCard(card) {
-        if (!card || card.dataset.aisnNotionFormatted === "1") {
+        if (
+            !card ||
+            card.dataset.aisnNotionFormatted === "1" ||
+            card.dataset.aisnAnswerRendererV3Done === "1" ||
+            card.dataset.aisnForceFormatted === "1" ||
+            card.dataset.aisnBrutalMdDone === "1" ||
+            card.dataset.aisnFinalMdDone === "1" ||
+            card.dataset.aisnUnifiedAnswerDone === "1"
+        ) {
             return;
         }
 
@@ -339,6 +347,11 @@ CSS;
         });
 
         card.dataset.aisnNotionFormatted = "1";
+        card.dataset.aisnAnswerRendererV3Done = "1";
+        card.dataset.aisnForceFormatted = "1";
+        card.dataset.aisnBrutalMdDone = "1";
+        card.dataset.aisnFinalMdDone = "1";
+        card.dataset.aisnUnifiedAnswerDone = "1";
     }
 
     function fixMojibakeEverywhere() {

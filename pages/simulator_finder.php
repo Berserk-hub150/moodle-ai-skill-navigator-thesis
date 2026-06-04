@@ -7,12 +7,10 @@ require_once(__DIR__ . '/../includes/back_to_course_helper.php');
 require_once(__DIR__ . '/../includes/ui_style_helper.php');
 require_once(__DIR__ . '/../classes/service/web_search_service.php');
 
-global $PAGE, $OUTPUT;
+global $PAGE, $OUTPUT, $USER;
 
 $courseid = optional_param('courseid', optional_param('id', SITEID, PARAM_INT), PARAM_INT);
 
-local_aisn_sim_require_materials_for_post((int)$courseid);
-local_aisn_sim_prepare_capture((int)$courseid);
 $action = optional_param('action', '', PARAM_ALPHA);
 $topic = optional_param('topic', '', PARAM_TEXT);
 $level = optional_param('level', 'medium', PARAM_ALPHA);
@@ -24,6 +22,8 @@ require_login($course);
 
 $context = context_course::instance($courseid);
 require_capability('local/aiskillnavigator:viewteacher', $context);
+
+local_aisn_sim_require_materials_for_post((int)$courseid);
 
 $PAGE->set_context($context);
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/simulator_finder.php', ['courseid' => $courseid]));
@@ -327,14 +327,37 @@ if ($action === 'generate') {
         $prompt .= "2. Istruzioni\n";
         $prompt .= "3. Simulatore/tool consigliato\n";
         $prompt .= "4. Link/fonte\n";
-        $prompt .= "5. PerchÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© questo simulatore ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ adatto\n";
-        $prompt .= "6. Alternativa se nessun simulatore ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ disponibile\n";
+        $prompt .= "5. Perché questo simulatore è adatto\n";
+        $prompt .= "6. Alternativa se nessun simulatore è disponibile\n";
         $prompt .= "7. Criteri di valutazione\n";
 
         $result = local_aiskillnavigator_sim_call_ai(
             $prompt,
             'You help teachers find practical online simulators/tools. Avoid fake links. Use live search results when available. Say no if no suitable simulator is known. Return numbered sections.'
         );
+
+        if (
+            trim($result) !== '' &&
+            !preg_match('/^(AI error|AI provider not available|Errore)/i', trim($result))
+        ) {
+            $selectedids = local_aisn_sim_selected_ids();
+            $selectedmaterials = local_aisn_sim_selected_materials((int)$courseid, $selectedids);
+            $selectedtitles = [];
+
+            foreach ($selectedmaterials as $material) {
+                $selectedtitles[] = local_aisn_sim_clean_title((string)($material->title ?? ''));
+            }
+
+            local_aisn_sim_save_generated(
+                (int)$courseid,
+                (int)$USER->id,
+                $topic,
+                $level,
+                $selectedids,
+                $selectedtitles,
+                $result
+            );
+        }
     }
 }
 

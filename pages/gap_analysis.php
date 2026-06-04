@@ -109,7 +109,7 @@ function local_aiskillnavigator_gap_collect(int $courseid): array {
             }
 
             foreach ($questions as $index => $question) {
-                $skill = trim((string)($question['Ability'] ?? 'General understanding'));
+                $skill = trim((string)($question['ability'] ?? $question['skill'] ?? $question['Ability'] ?? 'General understanding'));
 
                 if ($skill === '') {
                     $skill = 'General understanding';

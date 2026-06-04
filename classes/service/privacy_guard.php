@@ -4,6 +4,8 @@ namespace local_aiskillnavigator\service;
 
 defined('MOODLE_INTERNAL') || die();
 
+require_once(__DIR__ . '/../../includes/production_guard.php');
+
 class privacy_guard {
     public static function provider(): string {
         return strtolower(trim((string)get_config('local_aiskillnavigator', 'provider')));
@@ -58,22 +60,24 @@ class privacy_guard {
     }
 
     public static function can_use_teacher_materials_with_current_provider(): bool {
-        // Important: global blocking removed.
-        // The permission is now decided per material by externalaiallowed/aipolicy.
-        return true;
+        if (function_exists('local_aisn_prod_can_use_teacher_materials_with_current_provider')) {
+            return local_aisn_prod_can_use_teacher_materials_with_current_provider();
+        }
+        return self::is_local_provider();
     }
 
     public static function safe_embedding_endpoint(): string {
         $endpoint = self::endpoint();
-
-        if (self::is_local_endpoint($endpoint)) {
+        if (function_exists('local_aisn_prod_endpoint_is_allowed') && local_aisn_prod_endpoint_is_allowed($endpoint)) {
             return $endpoint;
         }
-
         return 'http://host.docker.internal:11434';
     }
 
     public static function teacher_materials_external_block_message(): string {
-        return '';
+        if (function_exists('local_aisn_prod_external_block_message')) {
+            return local_aisn_prod_external_block_message();
+        }
+        return 'Teacher materials are blocked for the current external AI provider.';
     }
 }

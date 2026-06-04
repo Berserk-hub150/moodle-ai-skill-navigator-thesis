@@ -15,7 +15,7 @@ class openai_compatible_ai_provider extends abstract_curl_ai_provider {
     }
 
     public function generate(string $prompt, int $maxtokens = 1200, string $systemprompt = ''): string {
-        $url = str_ends_with($this->endpoint, '/chat/completions')
+        $url = $this->ends_with($this->endpoint, '/chat/completions')
             ? $this->endpoint
             : $this->endpoint . '/chat/completions';
 
@@ -42,5 +42,13 @@ class openai_compatible_ai_provider extends abstract_curl_ai_provider {
         ];
 
         return $this->post_json_and_extract_answer($url, $payload, $headers, 'openai');
+    }
+
+    private function ends_with(string $haystack, string $needle): bool {
+        if ($needle === '') {
+            return true;
+        }
+
+        return substr($haystack, -strlen($needle)) === $needle;
     }
 }

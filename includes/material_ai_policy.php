@@ -1,29 +1,12 @@
 <?php
 
 defined('MOODLE_INTERNAL') || die();
+require_once(__DIR__ . '/production_guard.php');
 
 function local_aiskillnavigator_current_ai_is_local(): bool {
-    $provider = strtolower(trim((string)get_config('local_aiskillnavigator', 'provider')));
-    $endpoint = strtolower(trim((string)get_config('local_aiskillnavigator', 'endpoint')));
-
-    if ($provider === '' || $provider === 'prototype') {
-        return true;
-    }
-
-    if (in_array($provider, ['ollama', 'local', 'local_ollama'], true)) {
-        return true;
-    }
-
-    if (
-        str_contains($endpoint, 'localhost') ||
-        str_contains($endpoint, '127.0.0.1') ||
-        str_contains($endpoint, 'host.docker.internal') ||
-        str_contains($endpoint, '::1')
-    ) {
-        return true;
-    }
-
-    return false;
+    return function_exists('local_aisn_prod_current_ai_is_local')
+        ? local_aisn_prod_current_ai_is_local()
+        : true;
 }
 
 function local_aiskillnavigator_material_external_allowed(stdClass $material): bool {
@@ -39,10 +22,12 @@ function local_aiskillnavigator_material_external_allowed(stdClass $material): b
 }
 
 function local_aiskillnavigator_material_can_be_sent_to_current_ai(stdClass $material): bool {
+    if (function_exists('local_aisn_prod_can_send_material_to_current_ai')) {
+        return local_aisn_prod_can_send_material_to_current_ai($material);
+    }
     if (local_aiskillnavigator_current_ai_is_local()) {
         return true;
     }
-
     return local_aiskillnavigator_material_external_allowed($material);
 }
 
@@ -95,6 +80,8 @@ function local_aiskillnavigator_provider_privacy_notice(): string {
     if (local_aiskillnavigator_current_ai_is_local()) {
         return 'Current AI provider is local/prototype: course materials can be used without sending them to an external provider.';
     }
-
+    if (function_exists('local_aisn_prod_external_ai_globally_enabled') && !local_aisn_prod_external_ai_globally_enabled()) {
+        return 'Current AI provider is external, but external AI is not globally approved by the site administrator.';
+    }
     return 'Current AI provider is external: only materials explicitly allowed by the teacher can be sent to the AI provider.';
 }

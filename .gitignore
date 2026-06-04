@@ -1,15 +1,11 @@
-
-# Local backup files
-*.bak*
-backup_*
-
-
-# Local backup files
-*.bak*
-backup_*
-
-# Local backup files generated during development
-*.bak_*
-*.backup
-backup_*/
-**/backup_*/
+﻿.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+*.zip
+*.7z
+*.rar
+node_modules/
+vendor/
+.env

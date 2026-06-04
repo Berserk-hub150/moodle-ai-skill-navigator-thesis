@@ -1,0 +1,134 @@
+﻿/* AISN_TUTOR_FORCE_FORMATTER_V2 */
+
+.aisn-tutor-answer-card {
+    border: 1px solid #dbe7f3 !important;
+    border-radius: 24px !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08) !important;
+    overflow: hidden !important;
+}
+
+.aisn-tutor-answer-card .card-body {
+    padding: 30px 34px !important;
+}
+
+.aisn-tutor-answer-title {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    margin: 0 0 16px 0 !important;
+    font-size: 32px !important;
+    font-weight: 950 !important;
+    line-height: 1.1 !important;
+    letter-spacing: -0.045em !important;
+    color: #071226 !important;
+}
+
+.aisn-tutor-answer-title::before {
+    content: "AI";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #0f6fd9, #5aa7ff);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 950;
+    box-shadow: 0 10px 22px rgba(15, 111, 217, 0.25);
+}
+
+.aisn-used-materials {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    width: fit-content !important;
+    max-width: 100% !important;
+    margin: 0 0 22px 0 !important;
+    padding: 10px 15px !important;
+    border-radius: 999px !important;
+    background: #eef6ff !important;
+    color: #27496d !important;
+    border: 1px solid #cfe6ff !important;
+    font-size: 14px !important;
+    font-weight: 850 !important;
+}
+
+.aisn-used-materials::before {
+    content: "📚";
+}
+
+.aisn-tutor-answer-body,
+.aisn-tutor-answer-body .aisn-rendered-answer {
+    color: #101828 !important;
+    font-size: 17px !important;
+    line-height: 1.72 !important;
+}
+
+.aisn-tutor-answer-body p {
+    margin: 12px 0 15px 0 !important;
+}
+
+.aisn-tutor-answer-body h2,
+.aisn-tutor-answer-body h3,
+.aisn-tutor-answer-body h4,
+.aisn-tutor-section-title {
+    margin: 26px 0 12px 0 !important;
+    padding-left: 13px !important;
+    border-left: 5px solid #0f6fd9 !important;
+    color: #071226 !important;
+    font-size: 23px !important;
+    font-weight: 950 !important;
+    letter-spacing: -0.03em !important;
+    line-height: 1.2 !important;
+}
+
+.aisn-tutor-answer-body ul,
+.aisn-tutor-answer-body ol {
+    margin: 12px 0 20px 24px !important;
+    padding: 0 !important;
+}
+
+.aisn-tutor-answer-body li {
+    margin: 8px 0 !important;
+    padding-left: 4px !important;
+}
+
+.aisn-tutor-answer-body strong {
+    font-weight: 950 !important;
+    color: #071226 !important;
+}
+
+.aisn-tutor-answer-body code {
+    padding: 2px 7px !important;
+    border-radius: 8px !important;
+    background: #eef2f7 !important;
+    color: #111827 !important;
+    font-size: 0.92em !important;
+}
+
+.aisn-tutor-answer-body pre {
+    border-radius: 18px !important;
+    overflow: hidden !important;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12) !important;
+}
+
+.aisn-keypoint {
+    background: #f8fafc !important;
+    border: 1px solid #e5e7eb !important;
+    border-left: 5px solid #0f6fd9 !important;
+    border-radius: 15px !important;
+    padding: 13px 16px !important;
+    margin: 12px 0 !important;
+}
+
+.aisn-summary-box {
+    margin-top: 20px !important;
+    padding: 16px 18px !important;
+    border-radius: 17px !important;
+    background: #ecfdf5 !important;
+    border: 1px solid #bbf7d0 !important;
+    color: #064e3b !important;
+    font-weight: 850 !important;
+}

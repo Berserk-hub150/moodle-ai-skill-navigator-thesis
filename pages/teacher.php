@@ -411,7 +411,6 @@ if (function_exists('local_aiskillnavigator_render_course_builder_panel') && iss
 if (function_exists('local_aiskillnavigator_render_external_baseline_panel')) {
 }
 // END CALLISTO_REAL_FEATURES
-echo local_aiskillnavigator_tutor_signal_teacher_panel((int)$courseid);
 echo html_writer::tag('script', "
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('h1,h2,h3,h4').forEach(function (h) {

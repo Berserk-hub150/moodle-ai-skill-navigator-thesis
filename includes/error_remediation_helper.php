@@ -180,7 +180,7 @@ function local_aiskillnavigator_error_remediation_card(
     if ($explanation !== '') {
         $html .= html_writer::tag(
             'p',
-            html_writer::tag('strong', 'PerchÃ© hai sbagliato: ') . s($explanation),
+            html_writer::tag('strong', 'Perché hai sbagliato: ') . s($explanation),
             ['class' => 'mt-3 mb-2']
         );
     }
@@ -213,8 +213,8 @@ function local_aiskillnavigator_error_remediation_card(
     }
 
     $html .= html_writer::div(
-        html_writer::tag('strong', 'Mini-attivitÃ  di recupero: ') .
-        'guarda la risorsa consigliata, poi rispondi di nuovo spiegando in 3 righe perchÃ© la risposta corretta Ã¨ "' .
+        html_writer::tag('strong', 'Mini-attività di recupero: ') .
+        'guarda la risorsa consigliata, poi rispondi di nuovo spiegando in 3 righe perché la risposta corretta è "' .
         s($correctanswer) . '".',
         'aisn-remediation-activity'
     );

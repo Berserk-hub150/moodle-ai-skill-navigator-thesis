@@ -39,11 +39,11 @@ function local_aisn_mdtable_is_row(string $line): bool {
 function local_aisn_mdtable_split_row(string $line): array {
     $line = trim(local_aisn_mdtable_fix_text($line));
 
-    if (str_starts_with($line, '|')) {
+    if (substr($line, 0, 1) === '|') {
         $line = substr($line, 1);
     }
 
-    if (str_ends_with($line, '|')) {
+    if (substr($line, -1) === '|') {
         $line = substr($line, 0, -1);
     }
 

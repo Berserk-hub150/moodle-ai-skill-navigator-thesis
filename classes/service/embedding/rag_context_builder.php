@@ -10,6 +10,7 @@ class rag_context_builder {
         $context = '';
         $total = 0;
         $source = 1;
+        $seen = [];
 
         foreach ($results as $result) {
             $text = trim((string) ($result->chunktext ?? ''));
@@ -19,6 +20,14 @@ class rag_context_builder {
             }
 
             $title = trim((string) ($result->title ?? 'Materiale'));
+            $key = $this->identity_key($result, $title, $text);
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+
             $score = (string) ($result->similarity ?? 'n/a');
             $block = "FONTE {$source} (materiale: {$title}, rilevanza: {$score})\n{$text}\n\n";
             $length = \core_text::strlen($block);
@@ -37,5 +46,21 @@ class rag_context_builder {
         }
 
         return trim($context);
+    }
+
+    private function identity_key(\stdClass $result, string $title, string $text): string {
+        if (!empty($result->materialid) && isset($result->chunkindex)) {
+            return 'material-chunk:' . (int) $result->materialid . ':' . (int) $result->chunkindex;
+        }
+
+        $normalised = trim((string) preg_replace('/\s+/u', ' ', $title . "\n" . $text));
+
+        if (class_exists('\core_text')) {
+            $normalised = \core_text::strtolower($normalised);
+        } else {
+            $normalised = strtolower($normalised);
+        }
+
+        return md5($normalised);
     }
 }

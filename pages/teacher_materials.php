@@ -1,9 +1,14 @@
 <?php
 
 require_once(__DIR__ . '/../../../config.php');
+require_once($CFG->dirroot . '/course/lib.php');
+require_once($CFG->dirroot . '/course/modlib.php');
+require_once(__DIR__ . '/../includes/ui_style_helper.php');
 require_once(__DIR__ . '/../includes/back_to_course_helper.php');
 require_once(__DIR__ . '/../includes/material_ai_policy.php');
 require_once(__DIR__ . '/../includes/course_resource_sync.php');
+require_once(__DIR__ . '/../includes/knowledge_graph_helper.php');
+require_once(__DIR__ . '/../includes/material_exclusion_helper.php');
 require_once(__DIR__ . '/../includes/mojibake_guard.php');
 
 global $DB, $PAGE, $OUTPUT, $USER;
@@ -22,6 +27,57 @@ $PAGE->set_context($context);
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', ['courseid' => $courseid]));
 $PAGE->set_title('Course materials / RAG');
 $PAGE->set_heading('Course materials / RAG');
+// AISN_DELETE_MATERIAL_FROM_COURSE_HARDENED
+if ($action === 'delete' && $materialid > 0) {
+    require_sesskey();
+
+    $material = $DB->get_record('local_aiskillnav_material', [
+        'id' => $materialid,
+        'courseid' => $courseid,
+    ]);
+
+    if ($material) {
+        $cmid = 0;
+
+        if (isset($material->sourcecmid) && (int)$material->sourcecmid > 0) {
+            $cmid = (int)$material->sourcecmid;
+        }
+
+        if ($cmid <= 0 && function_exists('local_aisn_course_cm_id_from_material_title')) {
+            $cmid = local_aisn_course_cm_id_from_material_title((string)($material->title ?? ''));
+        }
+
+        if ($cmid > 0) {
+            try {
+                if (function_exists('local_aisn_course_material_set_excluded')) {
+                    local_aisn_course_material_set_excluded($courseid, $cmid, true);
+                }
+
+                course_delete_module($cmid);
+            } catch (Throwable $e) {
+                debugging('AI Skill Navigator delete course module failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            }
+        }
+
+        try {
+            $DB->delete_records('local_aiskillnav_material', ['id' => $materialid, 'courseid' => $courseid]);
+        } catch (Throwable $e) {
+            debugging('AI Skill Navigator delete material failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        }
+
+        if (function_exists('local_aisn_kg_delete_material')) {
+            try {
+                local_aisn_kg_delete_material($materialid);
+            } catch (Throwable $e) {
+                debugging('AI Skill Navigator KG delete failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            }
+        }
+    }
+
+    rebuild_course_cache($courseid, true);
+    redirect(new moodle_url('/local/aiskillnavigator/pages/teacher_materials.php', ['courseid' => $courseid]), 'Material deleted from course and RAG.', 1);
+}
+
 
 function local_aisn_tm_table_exists(string $name): bool {
     global $DB;
@@ -50,34 +106,51 @@ function local_aisn_tm_visible_course_materials(int $courseid): array {
         return [];
     }
 
-    local_aiskillnavigator_sync_course_resources($courseid, 0, true);
+    local_aiskillnavigator_sync_course_resources($courseid, 0, false);
 
     $records = $DB->get_records('local_aiskillnav_material', [
         'courseid' => $courseid,
         'materialtype' => 'course_resource',
-    ], 'title ASC');
+    ], 'timemodified DESC, id DESC');
 
     $modinfo = get_fast_modinfo($courseid);
-    $visible = [];
+    $bycmid = [];
 
     foreach ($records as $record) {
-        $title = (string)($record->title ?? '');
+        $cmid = local_aisn_course_cm_id_from_material_title((string)($record->title ?? ''));
 
-        if (!preg_match('/^\[Course #([0-9]+) \/ cm #([0-9]+)\]/', $title, $matches)) {
+        if ($cmid <= 0) {
             continue;
         }
 
-        $cmid = (int)$matches[2];
+        if (local_aisn_course_material_is_excluded($courseid, $cmid)) {
+            continue;
+        }
 
         if (empty($modinfo->cms[$cmid]) || empty($modinfo->cms[$cmid]->visible)) {
             continue;
         }
 
+        if (trim((string)($record->content ?? '')) === '') {
+            continue;
+        }
+
+        if (!isset($bycmid[$cmid])) {
+            $bycmid[$cmid] = $record;
+        }
+    }
+
+    ksort($bycmid);
+
+    $visible = [];
+
+    foreach ($bycmid as $record) {
         $visible[(int)$record->id] = $record;
     }
 
     return $visible;
 }
+
 
 function local_aisn_tm_cm_id_from_title(string $title): int {
     if (preg_match('/^\[Course #[0-9]+ \/ cm #([0-9]+)\]/', $title, $matches)) {
@@ -127,6 +200,23 @@ function local_aisn_tm_chunk_counts(array $materials): array {
     return $counts;
 }
 
+
+function local_aisn_tm_material_policy_external_allowed(stdClass $material): bool {
+    if (function_exists('local_aiskillnavigator_material_external_allowed')) {
+        return local_aiskillnavigator_material_external_allowed($material);
+    }
+
+    if (isset($material->externalaiallowed)) {
+        return ((int)$material->externalaiallowed) === 1;
+    }
+
+    if (isset($material->aipolicy)) {
+        return ((string)$material->aipolicy) === 'external_allowed';
+    }
+
+    return false;
+}
+
 function local_aisn_tm_set_policy(stdClass $material, bool $externalallowed): void {
     global $DB;
 
@@ -145,16 +235,131 @@ function local_aisn_tm_set_policy(stdClass $material, bool $externalallowed): vo
             'local_aiskillnavigator'
         );
     }
+
+    if (function_exists('local_aisn_kg_rebuild_material') && function_exists('local_aisn_kg_delete_material')) {
+        if ($externalallowed) {
+            local_aisn_kg_rebuild_material((int)$material->id);
+        } else {
+            local_aisn_kg_delete_material((int)$material->id);
+        }
+    }
+}
+
+function local_aisn_tm_material_cmid(stdClass $material): int {
+    if (isset($material->sourcecmid) && (int)$material->sourcecmid > 0) {
+        return (int)$material->sourcecmid;
+    }
+
+    if (function_exists('local_aisn_course_cm_id_from_material_title')) {
+        $cmid = local_aisn_course_cm_id_from_material_title((string)($material->title ?? ''));
+
+        if ($cmid > 0) {
+            return $cmid;
+        }
+    }
+
+    if (function_exists('local_aisn_tm_cm_id_from_title')) {
+        return local_aisn_tm_cm_id_from_title((string)($material->title ?? ''));
+    }
+
+    if (preg_match('/^\[Course #[0-9]+ \/ cm #([0-9]+)\]/', (string)($material->title ?? ''), $matches)) {
+        return (int)$matches[1];
+    }
+
+    return 0;
 }
 
 function local_aisn_tm_delete_material(stdClass $material): void {
     global $DB;
 
-    if (local_aisn_tm_table_exists('local_aiskillnav_chunk')) {
-        $DB->delete_records('local_aiskillnav_chunk', ['materialid' => (int)$material->id]);
+    $courseid = (int)($material->courseid ?? 0);
+    $materialid = (int)($material->id ?? 0);
+    $cmid = local_aisn_tm_material_cmid($material);
+
+    $materialids = [];
+
+    if ($materialid > 0) {
+        $materialids[] = $materialid;
     }
 
-    $DB->delete_records('local_aiskillnav_material', ['id' => (int)$material->id]);
+    if ($courseid > SITEID && $cmid > 0) {
+        // Blocca subito la ricomparsa nel RAG anche se la delete Moodle fallisse.
+        if (function_exists('local_aisn_course_material_set_excluded')) {
+            local_aisn_course_material_set_excluded($courseid, $cmid, true);
+        }
+
+        // Raccogli eventuali duplicati dello stesso course module.
+        try {
+            if (local_aisn_tm_table_exists('local_aiskillnav_material')) {
+                $dbman = $DB->get_manager();
+                $table = new xmldb_table('local_aiskillnav_material');
+                $sourcefield = new xmldb_field('sourcecmid');
+
+                if ($dbman->field_exists($table, $sourcefield)) {
+                    $samecm = $DB->get_records('local_aiskillnav_material', [
+                        'courseid' => $courseid,
+                        'materialtype' => 'course_resource',
+                        'sourcecmid' => $cmid,
+                    ]);
+
+                    foreach ($samecm as $row) {
+                        $materialids[] = (int)$row->id;
+                    }
+                }
+
+                $select = 'courseid = :courseid AND materialtype = :materialtype AND ' . $DB->sql_like('title', ':title', false, false);
+                $params = [
+                    'courseid' => $courseid,
+                    'materialtype' => 'course_resource',
+                    'title' => '[Course #' . $courseid . ' / cm #' . $cmid . ']%',
+                ];
+
+                $sametitle = $DB->get_records_select('local_aiskillnav_material', $select, $params);
+
+                foreach ($sametitle as $row) {
+                    $materialids[] = (int)$row->id;
+                }
+            }
+        } catch (Throwable $e) {
+            debugging('AI Skill Navigator material duplicate lookup failed before delete: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        }
+
+        // Questa è la parte che mancava: elimina davvero la risorsa/attività dal corso Moodle.
+        try {
+            $cm = get_coursemodule_from_id('', $cmid, $courseid, false, IGNORE_MISSING);
+
+            if ($cm && (int)$cm->course === $courseid) {
+                course_delete_module($cmid);
+            }
+        } catch (Throwable $e) {
+            debugging('AI Skill Navigator Moodle course module delete failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        }
+
+        unset_config('cm_ai_excluded_' . $cmid, 'local_aiskillnavigator');
+        unset_config('cm_external_ai_' . $cmid, 'local_aiskillnavigator');
+    }
+
+    $materialids = array_values(array_unique(array_filter(array_map('intval', $materialids))));
+
+    foreach ($materialids as $id) {
+        if (function_exists('local_aisn_kg_delete_material')) {
+            local_aisn_kg_delete_material($id);
+        }
+    }
+
+    if (!empty($materialids) && local_aisn_tm_table_exists('local_aiskillnav_chunk')) {
+        list($insql, $params) = $DB->get_in_or_equal($materialids, SQL_PARAMS_NAMED, 'mid');
+        $DB->delete_records_select('local_aiskillnav_chunk', 'materialid ' . $insql, $params);
+    }
+
+    if (!empty($materialids) && local_aisn_tm_table_exists('local_aiskillnav_material')) {
+        list($insql, $params) = $DB->get_in_or_equal($materialids, SQL_PARAMS_NAMED, 'mat');
+        $DB->delete_records_select('local_aiskillnav_material', 'id ' . $insql, $params);
+    }
+
+    if ($courseid > SITEID) {
+        rebuild_course_cache($courseid, true);
+    }
 }
 
 if ($action !== '' && $materialid > 0) {
@@ -174,7 +379,7 @@ if ($action !== '' && $materialid > 0) {
 
     if ($action === 'delete') {
         local_aisn_tm_delete_material($material);
-        redirect($PAGE->url, 'Material record deleted from AI index.', 1);
+        redirect($PAGE->url, 'Material deleted from course and RAG.', 1);
     }
 }
 
@@ -182,6 +387,7 @@ $materials = local_aisn_tm_visible_course_materials($courseid);
 $chunkscounts = local_aisn_tm_chunk_counts($materials);
 
 echo $OUTPUT->header();
+local_aiskillnavigator_print_inline_styles();
 
 echo html_writer::tag('style', '
 body.path-local-aiskillnavigator #page-header,
@@ -220,6 +426,18 @@ if (empty($materials)) {
 echo $OUTPUT->footer();
     exit;
 }
+
+
+if (function_exists('local_aisn_prod_current_ai_is_local')
+    && function_exists('local_aisn_prod_external_ai_globally_enabled')
+    && !local_aisn_prod_current_ai_is_local()
+    && !local_aisn_prod_external_ai_globally_enabled()) {
+    echo html_writer::div(
+        'AISN_EXTERNAL_GLOBAL_GATE_NOTICE: External AI provider detected, but the global admin approval is disabled. Materials can still be marked as Allowed here, but they will not be sent to external AI until the admin enables Approve external AI for teacher materials.',
+        'alert alert-warning'
+    );
+}
+
 
 echo html_writer::tag('h3', 'Synchronized course materials');
 
@@ -271,7 +489,7 @@ foreach ($materials as $material) {
     $content = (string)($material->content ?? '');
     $chunks = (int)($chunkscounts[$materialid] ?? 0);
     $policylabel = local_aiskillnavigator_ai_policy_label($material);
-    $externalallowed = local_aiskillnavigator_material_can_be_sent_to_current_ai($material);
+    $externalallowed = local_aisn_tm_material_policy_external_allowed($material);
 
     echo html_writer::start_div('card mb-3 shadow-sm', [
         'data-aisn-material-card' => '1',
@@ -329,7 +547,7 @@ if ($externalallowed) {
             'action' => 'delete',
             'sesskey' => sesskey(),
         ]),
-        'Delete AI index record',
+        'Delete from course and RAG',
         ['class' => 'btn btn-danger btn-sm']
     );
 
@@ -354,104 +572,3 @@ if (function_exists('local_aiskillnavigator_mojibake_guard')) {
     echo local_aiskillnavigator_mojibake_guard();
 }
 echo $OUTPUT->footer();
-
-
-
-
-
-
-echo html_writer::tag('script', <<<'JS'
-/* AISN_SEARCH_V4_START */
-(function () {
-    function norm(value) {
-        return String(value || "")
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-    }
-
-    function getSearchInput() {
-        return document.getElementById("aisn-material-search") ||
-            document.querySelector("input[type='search']") ||
-            document.querySelector("input.form-control");
-    }
-
-    function getCards() {
-        return Array.from(document.querySelectorAll(".card"));
-    }
-
-    function ensureEmptyMessage(input) {
-        var empty = document.getElementById("aisn-material-search-empty-v4");
-
-        if (!empty) {
-            empty = document.createElement("div");
-            empty.id = "aisn-material-search-empty-v4";
-            empty.className = "alert alert-warning mt-3";
-            empty.textContent = "No materials found.";
-            empty.style.display = "none";
-            input.insertAdjacentElement("afterend", empty);
-        }
-
-        return empty;
-    }
-
-    function applyFilter() {
-        var input = getSearchInput();
-
-        if (!input) {
-            return;
-        }
-
-        input.id = "aisn-material-search";
-        input.placeholder = "Search by title, filename, text or AI policy...";
-
-        var query = norm(input.value);
-        var cards = getCards();
-        var visible = 0;
-
-        cards.forEach(function (card) {
-            var text = norm(card.innerText || card.textContent || "");
-            var match = query === "" || text.indexOf(query) !== -1;
-
-            card.style.setProperty("display", match ? "" : "none", "important");
-
-            if (match) {
-                visible++;
-            }
-        });
-
-        var empty = ensureEmptyMessage(input);
-        empty.style.display = visible === 0 ? "" : "none";
-    }
-
-    function init() {
-        var input = getSearchInput();
-
-        if (!input) {
-            return;
-        }
-
-        input.oninput = applyFilter;
-        input.onkeyup = applyFilter;
-        input.onchange = applyFilter;
-        input.onsearch = applyFilter;
-
-        window.aisnMaterialSearchFilter = applyFilter;
-
-        applyFilter();
-    }
-
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", init);
-    } else {
-        init();
-    }
-
-    setTimeout(init, 200);
-    setTimeout(init, 800);
-    setTimeout(init, 1600);
-})();
-/* AISN_SEARCH_V4_END */
-JS);

@@ -13,6 +13,42 @@ require_once(__DIR__ . '/../includes/ai_output_helper.php');
 
 global $DB, $PAGE, $OUTPUT, $USER;
 
+if (!function_exists('local_aisn_tutor_ai_format_rules_clean_v2')) {
+    function local_aisn_tutor_ai_format_rules_clean_v2(): string {
+        return "\n\nAISN_TUTOR_AI_FORMAT_RULES_CLEAN_V2\n"
+            . "Regole di risposta obbligatorie:\n"
+            . "- Rispondi in italiano.\n"
+            . "- Usa Markdown pulito e ben strutturato.\n"
+            . "- Usa titoli brevi con ## quando la risposta contiene più parti.\n"
+            . "- Usa elenchi puntati per caratteristiche, vantaggi, esempi, differenze e casi d'uso.\n"
+            . "- Se mostri codice o comandi, scegli tu il linguaggio corretto del blocco markdown in base al contenuto.\n"
+            . "- Non etichettare un blocco come javascript se non è realmente JavaScript applicativo.\n"
+            . "- Per comandi database usa il linguaggio più adatto se lo riconosci, ad esempio sql, mongodb, cql, cypher, redis, oppure text se non sei sicuro.\n"
+            . "- Non iniziare ripetendo il nome del file materiale.\n"
+            . "- Non scrivere tutto in un unico paragrafo lungo.\n"
+            . "- Chiudi con una breve sezione ## In sintesi quando utile.\n";
+    }
+}
+
+
+if (!function_exists('local_aisn_tutor_ai_format_rules_clean')) {
+    function local_aisn_tutor_ai_format_rules_clean(): string {
+        return "\n\nAISN_TUTOR_AI_FORMAT_RULES_CLEAN_V1\n"
+            . "Regole di risposta obbligatorie:\n"
+            . "- Rispondi in italiano.\n"
+            . "- Usa Markdown pulito e ben strutturato.\n"
+            . "- Usa titoli brevi con ## quando la risposta contiene più parti.\n"
+            . "- Usa elenchi puntati per caratteristiche, vantaggi, esempi, differenze e casi d'uso.\n"
+            . "- Se mostri codice o comandi, scegli tu il linguaggio corretto del blocco markdown in base al contenuto.\n"
+            . "- Non etichettare un blocco come javascript se non è realmente JavaScript applicativo.\n"
+            . "- Per comandi database usa il linguaggio più adatto se lo riconosci, ad esempio sql, mongodb, cql, cypher, redis, oppure text se non sei sicuro.\n"
+            . "- Non iniziare ripetendo il nome del file materiale.\n"
+            . "- Non scrivere tutto in un unico paragrafo lungo.\n"
+            . "- Chiudi con una breve sezione ## In sintesi quando utile.\n";
+    }
+}
+
+
 $courseid = optional_param('courseid', optional_param('id', SITEID, PARAM_INT), PARAM_INT);
 $course = get_course($courseid);
 
@@ -29,6 +65,23 @@ $PAGE->set_context($context);
 $PAGE->set_url(new moodle_url('/local/aiskillnavigator/pages/tutor.php', ['courseid' => $courseid]));
 $PAGE->set_title('AI Tutor');
 $PAGE->set_heading('AI Tutor');
+if (!function_exists('local_aisn_tutor_formatting_suffix')) {
+    function local_aisn_tutor_formatting_suffix(): string {
+        return "\n\nAISN_TUTOR_FORMATTING_SUFFIX_V3\n"
+            . "Regole obbligatorie per la risposta del tutor:\n"
+            . "- Rispondi in italiano.\n"
+            . "- Usa Markdown pulito e ben strutturato.\n"
+            . "- Usa titoli con ## per sezioni come Definizione, Esempio, Spiegazione, Quando si usa, In sintesi.\n"
+            . "- Usa elenchi puntati per caratteristiche, vantaggi, esempi, passaggi e casi d'uso.\n"
+            . "- Non scrivere tutto in un unico paragrafo lungo.\n"
+            . "- Non iniziare ripetendo il nome del file materiale.\n"
+            . "- Se mostri codice o comandi, scegli tu il linguaggio corretto del blocco Markdown in base al contenuto.\n"
+            . "- Non etichettare un blocco come javascript se non è realmente JavaScript applicativo.\n"
+            . "- Per comandi database usa il linguaggio più adatto se lo riconosci, ad esempio sql, mongodb, cql, cypher, redis, oppure text se non sei sicuro.\n"
+            . "- Chiudi con una breve sezione ## In sintesi quando utile.\n";
+    }
+}
+
 
 function local_aiskillnavigator_tutor_limit_context(string $text, int $limit = 9000): string {
     $text = local_aiskillnavigator_fix_mojibake(trim($text));
@@ -118,11 +171,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $question;
             }
 
-            $answer = local_aiskillnavigator_fix_mojibake(local_aiskillnavigator_tutor_call_ai($prompt, $systemprompt));
+            $answer = local_aiskillnavigator_fix_mojibake(local_aiskillnavigator_tutor_call_ai($prompt, $systemprompt . local_aisn_tutor_formatting_suffix()));
         }
     }
 }
 
+$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/aisn_tutor_final_formatter.css', ['v' => time()]));
+$PAGE->requires->js(new moodle_url('/local/aiskillnavigator/assets/aisn_tutor_final_formatter.js', ['v' => time()]));
+$PAGE->requires->css(new moodle_url('/local/aiskillnavigator/assets/aisn_tutor_clean_answer.css', ['v' => time()]));
 echo $OUTPUT->header();
 local_aiskillnavigator_print_inline_styles();
 
@@ -207,21 +263,24 @@ echo html_writer::end_div();
 echo html_writer::end_tag('form');
 
 if ($answer !== '') {
-    echo html_writer::start_div('card mb-4');
+    // AISN_TUTOR_CLEAN_CARD_V2
+    echo html_writer::start_div('card mb-4 aisn-tutor-answer-card');
     echo html_writer::start_div('card-body');
 
-    echo html_writer::tag('h3', 'Answer');
+    echo html_writer::tag('h3', 'Answer', ['class' => 'aisn-tutor-answer-title']);
 
     if (!empty($usedmaterialnames)) {
         echo html_writer::div(
             'Used materials: ' . s(implode(', ', $usedmaterialnames)),
-            'text-muted mb-3'
+            'text-muted mb-3 aisn-used-materials'
         );
     } else {
-        echo html_writer::div('Used materials: none', 'text-muted mb-3');
+        echo html_writer::div('Used materials: none', 'text-muted mb-3 aisn-used-materials');
     }
 
+    echo html_writer::start_div('aisn-answer aisn-tutor-answer-body');
     echo local_aiskillnavigator_render_ai_answer($answer);
+    echo html_writer::end_div();
 
     echo html_writer::end_div();
     echo html_writer::end_div();
@@ -243,6 +302,13 @@ window.MathJax = {
 </script>';
 echo '<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>';
 echo '<script src="' . (new moodle_url('/local/aiskillnavigator/assets/aisn_answer_renderer_v3.js', ['v' => time()]))->out(false) . '"></script>';
+echo html_writer::tag('style', file_get_contents(__DIR__ . '/../assets/aisn_tutor_visual_override.css'));
+// AISN_TUTOR_VISUAL_OVERRIDE_LOAD_V4
+echo html_writer::tag('style', file_get_contents(__DIR__ . '/../assets/aisn_tutor_dom_bridge.css'));
+echo html_writer::script(file_get_contents(__DIR__ . '/../assets/aisn_tutor_dom_bridge.js'));
+// AISN_TUTOR_DOM_BRIDGE_LOAD_V1
+echo html_writer::script(file_get_contents(__DIR__ . '/../assets/aisn_tutor_dom_direct_style.js'));
+// AISN_TUTOR_DIRECT_STYLE_LOAD_V1
 echo $OUTPUT->footer();
 
 function local_aiskillnavigator_tutor_signal_capture_assets(int $courseid): string {
