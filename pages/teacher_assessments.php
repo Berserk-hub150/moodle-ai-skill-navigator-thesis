@@ -359,7 +359,7 @@ function local_aisn_ass_render_question_editor(string $key, int $number, array $
 
     $html .= html_writer::start_div('form-group mt-2');
     $html .= html_writer::tag('label', 'Correct answer');
-    $html .= html_writer::select([0 => 'A', 1 => 'B', 2 => 'C', 3 => 'D'], 'correct_index[' . $key . ']', $correct, false, ['class' => 'form-control']);
+    $html .= html_writer::select([0 => 'A', 1 => 'B', 2 => 'C', 3 => 'D'], 'correct_index[' . $key . ']', $correct, false, ['class' => 'form-control custom-select aisn-wide-select']);
     $html .= html_writer::end_div();
 
     $html .= html_writer::start_div('form-group mt-2');
@@ -432,7 +432,7 @@ function local_aisn_ass_render_edit_form(stdClass $assessment, array $quiz, int 
 
     echo html_writer::start_div('form-group mt-3');
     echo html_writer::tag('label', 'Difficulty');
-    echo html_writer::select(['easy' => 'Easy', 'medium' => 'Medium', 'hard' => 'Hard'], 'difficulty', (string)$assessment->difficulty, false, ['class' => 'form-control']);
+    echo html_writer::select(['easy' => 'Easy', 'medium' => 'Medium', 'hard' => 'Hard'], 'difficulty', (string)$assessment->difficulty, false, ['class' => 'form-control custom-select aisn-wide-select']);
     echo html_writer::end_div();
 
     echo html_writer::start_div('form-check mt-3');
@@ -981,7 +981,7 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('form-group mt-3');
 echo html_writer::tag('label', 'Assessment type');
-echo html_writer::select(['pre' => 'Initial diagnostic quiz / pre-test', 'final' => 'Final comprehension test / post-test'], 'assessmenttype', 'pre', false, ['class' => 'form-control', 'id' => 'assessmenttype']);
+echo html_writer::select(['pre' => 'Initial diagnostic quiz / pre-test', 'final' => 'Final comprehension test / post-test'], 'assessmenttype', 'pre', false, ['class' => 'form-control custom-select aisn-wide-select', 'id' => 'assessmenttype']);
 echo html_writer::end_div();
 
 echo html_writer::start_div('form-group mt-3', ['id' => 'aisn-final-material-source']);
@@ -996,7 +996,7 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('form-group mt-3');
 echo html_writer::tag('label', 'Difficulty');
-echo html_writer::select(['easy' => 'Easy', 'medium' => 'Medium', 'hard' => 'Hard'], 'difficulty', 'medium', false, ['class' => 'form-control']);
+echo html_writer::select(['easy' => 'Easy', 'medium' => 'Medium', 'hard' => 'Hard'], 'difficulty', 'medium', false, ['class' => 'form-control custom-select aisn-wide-select']);
 echo html_writer::end_div();
 
 echo html_writer::start_div('form-check mt-3');

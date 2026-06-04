@@ -639,7 +639,7 @@ echo html_writer::select(
     'difficulty',
     $difficulty,
     false,
-    ['class' => 'form-control', 'id' => 'difficulty']
+    ['class' => 'form-control custom-select aisn-wide-select', 'id' => 'difficulty']
 );
 echo html_writer::end_div();
 

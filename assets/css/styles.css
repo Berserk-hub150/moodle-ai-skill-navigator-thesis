@@ -460,3 +460,73 @@ body[id^="page-local-aiskillnavigator"] summary:focus {
         max-width: 100% !important;
     }
 }
+/* AISN_GLOBAL_SELECT_VISIBILITY_FINAL_V2 */
+/* Select Moodle leggibili in tutte le pagine del plugin. */
+body.path-local-aiskillnavigator select,
+body.path-local-aiskillnavigator select.select,
+body.path-local-aiskillnavigator select.form-control,
+body.path-local-aiskillnavigator select.custom-select,
+body.path-local-aiskillnavigator select.aisn-wide-select {
+    display: inline-block !important;
+    width: 320px !important;
+    min-width: 260px !important;
+    max-width: 100% !important;
+    height: 46px !important;
+    min-height: 46px !important;
+    padding: 10px 42px 10px 14px !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+    box-sizing: border-box !important;
+    appearance: auto !important;
+    -webkit-appearance: menulist !important;
+    vertical-align: middle !important;
+    overflow: visible !important;
+}
+
+body.path-local-aiskillnavigator #difficulty,
+body.path-local-aiskillnavigator #assessmenttype,
+body.path-local-aiskillnavigator #level,
+body.path-local-aiskillnavigator select[name="difficulty"],
+body.path-local-aiskillnavigator select[name="assessmenttype"],
+body.path-local-aiskillnavigator select[name="level"] {
+    width: 320px !important;
+    min-width: 260px !important;
+    max-width: 100% !important;
+}
+
+body.path-local-aiskillnavigator .form-group,
+body.path-local-aiskillnavigator .mb-3,
+body.path-local-aiskillnavigator .card,
+body.path-local-aiskillnavigator .card-body,
+body.path-local-aiskillnavigator .container-fluid,
+body.path-local-aiskillnavigator #region-main,
+body.path-local-aiskillnavigator [role="main"] {
+    overflow: visible !important;
+}
+
+body.path-local-aiskillnavigator .form-group:has(select),
+body.path-local-aiskillnavigator .mb-3:has(select) {
+    margin-bottom: 26px !important;
+}
+
+body.path-local-aiskillnavigator .form-group:has(select) + input[type="submit"],
+body.path-local-aiskillnavigator .mb-3:has(select) + input[type="submit"],
+body.path-local-aiskillnavigator select + input[type="submit"],
+body.path-local-aiskillnavigator select + .btn {
+    margin-top: 18px !important;
+}
+
+@media (max-width: 700px) {
+    body.path-local-aiskillnavigator select,
+    body.path-local-aiskillnavigator select.select,
+    body.path-local-aiskillnavigator select.form-control,
+    body.path-local-aiskillnavigator select.custom-select,
+    body.path-local-aiskillnavigator select.aisn-wide-select {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+}

@@ -430,7 +430,7 @@ echo html_writer::select(
     'level',
     $level,
     false,
-    ['class' => 'form-control mb-3', 'id' => 'level']
+    ['class' => 'form-control custom-select aisn-wide-select mb-3', 'id' => 'level']
 );
 
 echo html_writer::tag('label', 'Optional teacher notes/material', ['for' => 'notes']);

@@ -4195,11 +4195,6 @@ echo html_writer::tag('textarea', s($prompt), [
     'placeholder' => 'Esempio: crea una sezione per ogni file e metti un file per sezione'
 ]);
 
-echo html_writer::div(
-    'ModalitÃ  emergenza veloce: per la demo usa 2-5 file alla volta, soprattutto se sono PDF/PPT.',
-    'alert alert-info'
-);
-
 echo html_writer::tag('label', 'Materiali da usare nel prompt', ['for' => 'materials']);
 echo html_writer::empty_tag('input', [
     'type' => 'file',
