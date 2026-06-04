@@ -244,27 +244,67 @@ function local_aisn_ass_get_attempt_count(int $assessmentid): int {
 }
 
 function local_aisn_ass_questions_from_form(): array {
-    $keys = optional_param_array('qkey', [], PARAM_ALPHANUMEXT);
-    $questionraw = optional_param_array('question', [], PARAM_RAW_TRIMMED);
-    $optionraw = optional_param_array('option', [], PARAM_RAW_TRIMMED);
-    $correctraw = optional_param_array('correct_index', [], PARAM_INT);
-    $abilityraw = optional_param_array('ability', [], PARAM_TEXT);
-    $explanationraw = optional_param_array('explanation', [], PARAM_RAW_TRIMMED);
+    // AISN_ASS_NESTED_OPTION_FIX_V1
+    // Moodle optional_param_array() non gestisce bene array annidati tipo option[key][].
+    // Qui leggiamo $_POST in modo controllato e puliamo solo valori scalari con clean_param().
+    $post = $_POST;
+
+    $keysraw = isset($post['qkey']) && is_array($post['qkey']) ? $post['qkey'] : [];
+    $questionraw = isset($post['question']) && is_array($post['question']) ? $post['question'] : [];
+    $optionraw = isset($post['option']) && is_array($post['option']) ? $post['option'] : [];
+    $correctraw = isset($post['correct_index']) && is_array($post['correct_index']) ? $post['correct_index'] : [];
+    $abilityraw = isset($post['ability']) && is_array($post['ability']) ? $post['ability'] : [];
+    $explanationraw = isset($post['explanation']) && is_array($post['explanation']) ? $post['explanation'] : [];
+
+    $cleanstring = static function($value, string $type = PARAM_RAW_TRIMMED): string {
+        if (is_array($value)) {
+            return '';
+        }
+
+        return clean_param((string)$value, $type);
+    };
+
+    $cleanint = static function($value): int {
+        if (is_array($value)) {
+            return 0;
+        }
+
+        return (int)clean_param((string)$value, PARAM_INT);
+    };
 
     $questions = [];
-    foreach ($keys as $key) {
+
+    foreach ($keysraw as $keyraw) {
+        if (is_array($keyraw)) {
+            continue;
+        }
+
+        $key = clean_param((string)$keyraw, PARAM_ALPHANUMEXT);
         $key = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$key);
+
         if ($key === '') {
             continue;
         }
-        $options = isset($optionraw[$key]) && is_array($optionraw[$key]) ? array_values($optionraw[$key]) : [];
+
+        $options = [];
+        $rawoptions = isset($optionraw[$key]) && is_array($optionraw[$key]) ? $optionraw[$key] : [];
+
+        foreach (array_slice(array_values($rawoptions), 0, 4) as $rawoption) {
+            $options[] = $cleanstring($rawoption, PARAM_RAW_TRIMMED);
+        }
+
+        while (count($options) < 4) {
+            $options[] = '';
+        }
+
         $normalized = local_aisn_ass_normalize_question([
-            'question' => $questionraw[$key] ?? '',
+            'question' => $cleanstring($questionraw[$key] ?? '', PARAM_RAW_TRIMMED),
             'options' => $options,
-            'correct_index' => $correctraw[$key] ?? 0,
-            'ability' => $abilityraw[$key] ?? '',
-            'explanation' => $explanationraw[$key] ?? '',
+            'correct_index' => $cleanint($correctraw[$key] ?? 0),
+            'ability' => $cleanstring($abilityraw[$key] ?? '', PARAM_TEXT),
+            'explanation' => $cleanstring($explanationraw[$key] ?? '', PARAM_RAW_TRIMMED),
         ]);
+
         if ($normalized !== null) {
             $questions[] = $normalized;
         }
@@ -273,9 +313,9 @@ function local_aisn_ass_questions_from_form(): array {
     if (empty($questions)) {
         throw new moodle_exception('At least one valid question with at least two non-empty options is required.');
     }
+
     return $questions;
 }
-
 function local_aisn_ass_render_question_editor(string $key, int $number, array $question): string {
     $question = local_aisn_ass_normalize_question($question) ?? [
         'question' => '',
