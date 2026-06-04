@@ -362,6 +362,113 @@ if ($action === 'generate') {
 }
 
 echo $OUTPUT->header();
+echo html_writer::tag('style', <<<'CSS'
+/* AISN_DIRECT_SELECT_FIX_FINAL_V1 */
+body.path-local-aiskillnavigator select#difficulty,
+body.path-local-aiskillnavigator select#level,
+body.path-local-aiskillnavigator select[name="difficulty"],
+body.path-local-aiskillnavigator select[name="level"] {
+    display: block !important;
+    width: 360px !important;
+    min-width: 360px !important;
+    max-width: 100% !important;
+    height: 50px !important;
+    min-height: 50px !important;
+    padding: 10px 46px 10px 14px !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+    box-sizing: border-box !important;
+    appearance: auto !important;
+    -webkit-appearance: menulist !important;
+}
+
+body.path-local-aiskillnavigator label[for="difficulty"],
+body.path-local-aiskillnavigator label[for="level"] {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 0 8px 0 !important;
+    font-weight: 900 !important;
+    color: #0f172a !important;
+}
+
+body.path-local-aiskillnavigator select#difficulty + *,
+body.path-local-aiskillnavigator select#level + * {
+    margin-top: 18px !important;
+}
+
+body.path-local-aiskillnavigator form,
+body.path-local-aiskillnavigator .card,
+body.path-local-aiskillnavigator .card-body,
+body.path-local-aiskillnavigator .container-fluid,
+body.path-local-aiskillnavigator #region-main,
+body.path-local-aiskillnavigator [role="main"] {
+    overflow: visible !important;
+}
+
+@media (max-width: 700px) {
+    body.path-local-aiskillnavigator select#difficulty,
+    body.path-local-aiskillnavigator select#level,
+    body.path-local-aiskillnavigator select[name="difficulty"],
+    body.path-local-aiskillnavigator select[name="level"] {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+}
+CSS);
+
+echo html_writer::script(<<<'JS'
+// AISN_DIRECT_SELECT_FIX_FINAL_V1
+(function () {
+    function fixSelect(id) {
+        var el = document.getElementById(id);
+        if (!el) {
+            return;
+        }
+
+        el.classList.add('aisn-direct-fixed-select');
+
+        el.style.setProperty('display', 'block', 'important');
+        el.style.setProperty('width', window.innerWidth <= 700 ? '100%' : '360px', 'important');
+        el.style.setProperty('min-width', window.innerWidth <= 700 ? '0' : '360px', 'important');
+        el.style.setProperty('max-width', '100%', 'important');
+        el.style.setProperty('height', '50px', 'important');
+        el.style.setProperty('min-height', '50px', 'important');
+        el.style.setProperty('padding', '10px 46px 10px 14px', 'important');
+        el.style.setProperty('box-sizing', 'border-box', 'important');
+        el.style.setProperty('font-size', '15px', 'important');
+        el.style.setProperty('line-height', '1.45', 'important');
+        el.style.setProperty('border-radius', '12px', 'important');
+        el.style.setProperty('appearance', 'auto', 'important');
+        el.style.setProperty('-webkit-appearance', 'menulist', 'important');
+
+        var group = el.closest('.form-group, .mb-3') || el.parentElement;
+        if (group) {
+            group.style.setProperty('overflow', 'visible', 'important');
+            group.style.setProperty('margin-bottom', '32px', 'important');
+        }
+    }
+
+    function run() {
+        fixSelect('difficulty');
+        fixSelect('level');
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run);
+    } else {
+        run();
+    }
+
+    window.addEventListener('resize', run);
+    setTimeout(run, 300);
+    setTimeout(run, 1000);
+})();
+JS);
+
 local_aiskillnavigator_print_inline_styles();
 
 echo html_writer::start_div('container-fluid');
@@ -430,7 +537,7 @@ echo html_writer::select(
     'level',
     $level,
     false,
-    ['class' => 'form-control custom-select aisn-wide-select mb-3', 'id' => 'level']
+    ['class' => 'form-control custom-select aisn-direct-fixed-select mb-3', 'id' => 'level', 'style' => 'display:block!important;width:360px!important;min-width:360px!important;max-width:100%!important;height:50px!important;min-height:50px!important;padding:10px 46px 10px 14px!important;box-sizing:border-box!important;font-size:15px!important;line-height:1.45!important;border-radius:12px!important;appearance:auto!important;-webkit-appearance:menulist!important;']
 );
 
 echo html_writer::tag('label', 'Optional teacher notes/material', ['for' => 'notes']);
