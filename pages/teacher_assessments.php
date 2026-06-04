@@ -704,6 +704,102 @@ $assessments = local_aisn_ass_table_exists('local_aiskillnav_assessment')
 
 echo $OUTPUT->header();
 local_aiskillnavigator_print_inline_styles();
+echo html_writer::tag('style', <<<'CSS'
+/* AISN_ASS_FORM_VISUAL_FIX_V1 */
+body.path-local-aiskillnavigator .card .card-body form .form-group {
+    display: block !important;
+    width: 100% !important;
+    margin-bottom: 20px !important;
+}
+
+body.path-local-aiskillnavigator .card .card-body form label {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 0 8px 0 !important;
+    font-weight: 900 !important;
+    color: #0f172a !important;
+    line-height: 1.25 !important;
+}
+
+body.path-local-aiskillnavigator .card .card-body form input.form-control,
+body.path-local-aiskillnavigator .card .card-body form select.form-control,
+body.path-local-aiskillnavigator .card .card-body form textarea.form-control {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    min-height: 46px !important;
+    height: auto !important;
+    padding: 10px 14px !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    box-sizing: border-box !important;
+    line-height: 1.45 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 15px !important;
+}
+
+body.path-local-aiskillnavigator .card .card-body form select.form-control {
+    appearance: auto !important;
+    -webkit-appearance: menulist !important;
+    padding-right: 42px !important;
+    cursor: pointer !important;
+}
+
+body.path-local-aiskillnavigator #assessmenttype,
+body.path-local-aiskillnavigator select[name="difficulty"] {
+    width: 100% !important;
+    max-width: 720px !important;
+    min-width: 360px !important;
+}
+
+body.path-local-aiskillnavigator .form-control-plaintext {
+    display: block !important;
+    width: 100% !important;
+    max-width: 720px !important;
+    min-height: 46px !important;
+    padding: 10px 14px !important;
+    border-radius: 12px !important;
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #0f172a !important;
+    box-sizing: border-box !important;
+}
+
+body.path-local-aiskillnavigator .form-check {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    margin-top: 18px !important;
+}
+
+body.path-local-aiskillnavigator .form-check-input {
+    position: static !important;
+    margin: 0 !important;
+    width: 18px !important;
+    height: 18px !important;
+}
+
+body.path-local-aiskillnavigator .form-check-label {
+    display: inline-block !important;
+    width: auto !important;
+    margin: 0 !important;
+}
+
+body.path-local-aiskillnavigator .card .card-body {
+    overflow: visible !important;
+}
+
+@media (max-width: 700px) {
+    body.path-local-aiskillnavigator #assessmenttype,
+    body.path-local-aiskillnavigator select[name="difficulty"] {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+}
+CSS);
+
 echo html_writer::start_div('container-fluid');
 echo html_writer::tag('h2', 'Initial/final tests');
 echo html_writer::tag('p', 'Create an initial diagnostic quiz before the lesson and a final test grounded on selected course materials. The teacher can edit tests before publishing.', ['class' => 'lead']);
