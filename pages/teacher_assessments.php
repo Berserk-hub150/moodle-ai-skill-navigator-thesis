@@ -800,6 +800,139 @@ body.path-local-aiskillnavigator .card .card-body {
 }
 CSS);
 
+
+echo html_writer::tag('style', <<<'CSS'
+/* AISN_ASS_SELECT_VISIBILITY_FIX_V1 */
+body.path-local-aiskillnavigator form,
+body.path-local-aiskillnavigator .card,
+body.path-local-aiskillnavigator .card-body,
+body.path-local-aiskillnavigator .container-fluid,
+body.path-local-aiskillnavigator #region-main,
+body.path-local-aiskillnavigator [role="main"] {
+    overflow: visible !important;
+}
+
+body.path-local-aiskillnavigator select,
+body.path-local-aiskillnavigator select.form-control,
+body.path-local-aiskillnavigator select.custom-select {
+    display: block !important;
+    width: min(720px, 100%) !important;
+    max-width: 100% !important;
+    min-width: 360px !important;
+    min-height: 48px !important;
+    height: auto !important;
+    padding: 10px 42px 10px 14px !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+    box-sizing: border-box !important;
+    position: relative !important;
+    z-index: 50 !important;
+    appearance: auto !important;
+    -webkit-appearance: menulist !important;
+}
+
+body.path-local-aiskillnavigator .aisn-select-visible-group {
+    display: block !important;
+    width: 100% !important;
+    overflow: visible !important;
+    position: relative !important;
+    z-index: 80 !important;
+}
+
+body.path-local-aiskillnavigator .aisn-select-visible-group.aisn-select-open-space {
+    margin-bottom: 150px !important;
+    z-index: 10000 !important;
+}
+
+body.path-local-aiskillnavigator .aisn-select-visible-group select {
+    z-index: 10001 !important;
+}
+
+@media (max-width: 700px) {
+    body.path-local-aiskillnavigator select,
+    body.path-local-aiskillnavigator select.form-control,
+    body.path-local-aiskillnavigator select.custom-select {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    body.path-local-aiskillnavigator .aisn-select-visible-group.aisn-select-open-space {
+        margin-bottom: 170px !important;
+    }
+}
+CSS);
+
+echo html_writer::script(<<<'JS'
+// AISN_ASS_SELECT_VISIBILITY_FIX_V1
+(function () {
+    function applySelectVisibilityFix() {
+        var selects = document.querySelectorAll('select');
+
+        selects.forEach(function (select) {
+            if (select.dataset.aisnSelectVisibilityFix === '1') {
+                return;
+            }
+
+            select.dataset.aisnSelectVisibilityFix = '1';
+            select.classList.add('aisn-select-visible');
+
+            select.style.display = 'block';
+            select.style.width = window.innerWidth <= 700 ? '100%' : 'min(720px, 100%)';
+            select.style.maxWidth = '100%';
+            select.style.minWidth = window.innerWidth <= 700 ? '0' : '360px';
+            select.style.minHeight = '48px';
+            select.style.height = 'auto';
+            select.style.padding = '10px 42px 10px 14px';
+            select.style.boxSizing = 'border-box';
+            select.style.position = 'relative';
+            select.style.zIndex = '10001';
+
+            var group = select.closest('.form-group, .mb-3, .form-inline, .fitem') || select.parentElement;
+
+            if (!group) {
+                return;
+            }
+
+            group.classList.add('aisn-select-visible-group');
+            group.style.overflow = 'visible';
+            group.style.position = 'relative';
+
+            function openSpace() {
+                group.classList.add('aisn-select-open-space');
+                group.style.marginBottom = window.innerWidth <= 700 ? '170px' : '150px';
+                group.style.zIndex = '10000';
+            }
+
+            function closeSpace() {
+                window.setTimeout(function () {
+                    group.classList.remove('aisn-select-open-space');
+                    group.style.marginBottom = '';
+                    group.style.zIndex = '';
+                }, 250);
+            }
+
+            select.addEventListener('focus', openSpace);
+            select.addEventListener('mousedown', openSpace);
+            select.addEventListener('touchstart', openSpace);
+            select.addEventListener('blur', closeSpace);
+            select.addEventListener('change', closeSpace);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applySelectVisibilityFix);
+    } else {
+        applySelectVisibilityFix();
+    }
+
+    window.addEventListener('resize', applySelectVisibilityFix);
+})();
+JS);
+
 echo html_writer::start_div('container-fluid');
 echo html_writer::tag('h2', 'Initial/final tests');
 echo html_writer::tag('p', 'Create an initial diagnostic quiz before the lesson and a final test grounded on selected course materials. The teacher can edit tests before publishing.', ['class' => 'lead']);
