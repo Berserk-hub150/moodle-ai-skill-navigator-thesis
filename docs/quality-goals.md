@@ -1,19 +1,13 @@
-# Software Quality Goals
+﻿# Quality goals
 
-The AI Skill Navigator plugin is designed around software quality attributes studied in Software Engineering.
+AI Skill Navigator focuses on the following software quality attributes.
 
-Product qualities considered:
-
-- functional correctness;
-- reliability;
-- robustness;
-- efficiency;
-- usability;
-- verifiability;
-- maintainability;
-- reusability;
-- portability;
-- comprehensibility;
-- interoperability.
-
-The refactoring focuses especially on maintainability, comprehensibility, reusability, robustness and verifiability.
+| Attribute | Description |
+|---|---|
+| Maintainability | The AI layer is separated into providers, prompt builders and workflows. |
+| Extensibility | New AI providers and tools can be added with limited changes. |
+| Portability | Provider, endpoint and model can be configured. |
+| Robustness | Prototype/demo providers keep the system usable without external services. |
+| Comprehensibility | The repository structure separates pages, helpers, services and assets. |
+| Verifiability | PHP files can be checked with lint scripts before demo or delivery. |
+| Interoperability | The plugin remains integrated with Moodle courses, users and materials. |

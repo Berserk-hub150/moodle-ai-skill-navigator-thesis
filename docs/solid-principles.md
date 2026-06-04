@@ -1,21 +1,27 @@
-# SOLID Principles Applied to AI Skill Navigator
+﻿# SOLID principles
 
-## Single Responsibility
+The project applies SOLID principles mainly in the AI and service layer.
 
-AI provider calls, prompt construction and workflow orchestration are separated.
+## Single Responsibility Principle
 
-## Open/Closed
+Provider calls, prompt construction, output processing and workflow orchestration are separated into different components.
 
-New AI providers can be added by implementing the provider interface.
+## Open/Closed Principle
 
-## Liskov Substitution
+New AI providers can be added by implementing the provider interface, without rewriting Moodle pages.
 
-All providers implement the same contract and can be used interchangeably.
+## Liskov Substitution Principle
 
-## Interface Segregation
+Provider implementations can be used interchangeably through the same contract.
 
-The plugin exposes a small text generation interface instead of forcing pages to depend on concrete APIs.
+## Interface Segregation Principle
 
-## Dependency Inversion
+Pages depend on small AI service contracts instead of large concrete classes.
 
-High-level workflow services depend on abstractions, not on concrete provider classes.
+## Dependency Inversion Principle
+
+High-level workflows depend on abstractions and provider interfaces, not directly on vendor-specific API clients.
+
+## Note
+
+Some Moodle page files are still large because they act as prototype integration points. The strongest SOLID application is in the refactored AI/service layer.

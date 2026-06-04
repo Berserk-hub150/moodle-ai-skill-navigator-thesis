@@ -1,14 +1,41 @@
-# Manual Test Checklist
+﻿# Manual test checklist
 
-After each relevant refactoring step:
+Use this checklist before a thesis demo.
 
-1. Open Moodle dashboard.
-2. Open AI Skill Navigator index.
-3. Open General AI Tutor.
-4. Open Course AI Tutor.
-5. Open AI Quiz Generator.
-6. Open AI Mind Map Generator.
-7. Open AI XR Scenario Generator.
-8. Check that no PHP error page is displayed.
-9. Run the PHP lint script.
-10. Purge Moodle cache after deployment.
+## General checks
+
+- Start Docker containers.
+- Open Moodle.
+- Run Moodle cache purge.
+- Run PHP lint checks.
+- Open the plugin dashboard.
+
+## Teacher tools
+
+- Open AI Course Builder.
+- Create or modify a course section.
+- Insert formatted text.
+- Open Course Materials / RAG.
+- Open Teacher Dashboard.
+- Open Tutor Analytics.
+
+## Student tools
+
+- Open AI Tutor.
+- Ask a question based on course materials.
+- Generate or complete an assessment.
+- Open adaptive review if available.
+
+## Simulator workflow
+
+- Open AI Simulator Finder.
+- Generate a simulator suggestion.
+- Save the simulation.
+- Open Saved simulations.
+- Check that the saved simulation is not duplicated.
+- Open the simulation detail page.
+- Check that links are clickable.
+
+## Final expected result
+
+The plugin should be usable for a live academic demo without manual database edits or command-line work during the presentation.

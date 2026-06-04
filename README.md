@@ -1,4 +1,4 @@
-# AI Skill Navigator
+﻿# AI Skill Navigator
 
 AI Skill Navigator is an academic Moodle local plugin prototype that integrates Generative AI into a university LMS to support students and teachers.
 
@@ -6,14 +6,14 @@ It provides AI-assisted tutoring, course-material-grounded answers, quiz generat
 
 ## Main features
 
-* AI Tutor for course-aware learning support.
-* Course AI Builder for creating and editing Moodle course content through natural language prompts.
-* Quiz and assessment generation from teacher materials.
-* Mind Map Generator for concept visualisation.
-* AI Simulator Finder for practical learning activities.
-* Teacher dashboard and tutor analytics.
-* Course Materials / RAG area for managing extracted learning content.
-* Learning-gap analysis based on student results.
+- AI Tutor for course-aware learning support.
+- Course AI Builder for creating and editing Moodle course content through natural language prompts.
+- Quiz and assessment generation from teacher materials.
+- Mind Map Generator for concept visualisation.
+- AI Simulator Finder for practical learning activities.
+- Teacher dashboard and tutor analytics.
+- Course Materials / RAG area for managing extracted learning content.
+- Learning-gap analysis based on student results.
 
 ## Architecture
 
@@ -40,37 +40,31 @@ db/
 
 The AI layer uses three main design patterns:
 
-* **Strategy**: AI providers are interchangeable through a common interface.
-* **Factory Method**: the provider factory creates the correct provider from Moodle settings.
-* **Facade**: workflow services expose high-level AI operations to Moodle pages.
+- **Strategy**: AI providers are interchangeable through a common interface.
+- **Factory Method**: the provider factory creates the correct provider from Moodle settings.
+- **Facade**: workflow services expose high-level AI operations to Moodle pages.
 
 ## SOLID principles
 
-The refactored service layer applies the main SOLID principles:
+The refactored service layer applies the main SOLID principles.
 
-| Principle             | Application                                                                        |
-| --------------------- | ---------------------------------------------------------------------------------- |
-| Single Responsibility | Provider calls, prompt construction and workflow orchestration are separated.      |
-| Open/Closed           | New AI providers can be added without rewriting Moodle pages.                      |
-| Liskov Substitution   | Providers share the same contract and can be used interchangeably.                 |
-| Interface Segregation | Pages depend on small service interfaces instead of concrete API classes.          |
-| Dependency Inversion  | High-level workflows depend on abstractions rather than vendor-specific providers. |
+| Principle | Application |
+|---|---|
+| Single Responsibility | Provider calls, prompt construction and workflow orchestration are separated. |
+| Open/Closed | New AI providers can be added without rewriting Moodle pages. |
+| Liskov Substitution | Providers share the same contract and can be used interchangeably. |
+| Interface Segregation | Pages depend on small service interfaces instead of concrete API classes. |
+| Dependency Inversion | High-level workflows depend on abstractions rather than vendor-specific providers. |
 
-## AI providers
+## Project documentation
 
-Supported provider names include:
-
-* `deepseek`
-* `openai`
-* `openai_compatible`
-* `openrouter`
-* `groq`
-* `ollama`
-* `prototype`
-* `mock`
-* `demo`
-
-The current demo configuration uses an OpenAI-compatible provider. API keys are not stored in the repository and must be configured through Moodle/plugin settings.
+- [Architecture overview](docs/architecture-overview.md)
+- [Design patterns](docs/design-patterns.md)
+- [SOLID principles](docs/solid-principles.md)
+- [Quality goals](docs/quality-goals.md)
+- [Manual test checklist](docs/manual-test-checklist.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Release notes](docs/RELEASE_NOTES.md)
 
 ## Local development
 

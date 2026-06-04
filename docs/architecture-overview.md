@@ -1,13 +1,33 @@
-# Architecture Overview
+﻿# Architecture overview
 
-The plugin is organised around Moodle pages and service classes.
+AI Skill Navigator is a Moodle local plugin prototype that integrates Generative AI into course activities.
 
-The refactored AI layer contains:
+The plugin is organised into four main areas:
 
-- provider strategies;
-- provider factory;
-- prompt builder;
-- workflow facade;
-- backward-compatible service wrapper.
+- Moodle pages, used as entry points for teachers and students.
+- Shared helpers, used for rendering, materials, RAG, simulations and UI utilities.
+- Service classes, used for AI providers, prompt construction, workflows and embedding/RAG support.
+- Moodle database files, used for install and upgrade schema management.
 
-Existing pages can keep using `real_ai_service`, while the internal implementation follows clearer responsibilities.
+## Main layers
+
+```text
+pages/
+  Moodle page controllers and user interfaces
+
+includes/
+  shared helper functions and rendering utilities
+
+classes/service/
+  AI providers, prompt builders, workflow services and RAG services
+
+assets/
+  CSS and JavaScript resources
+
+db/
+  Moodle install and upgrade definitions
+```
+
+## Main idea
+
+The public Moodle pages remain stable, while the AI-related logic is moved into reusable services. This improves maintainability, extensibility and portability across different AI providers.

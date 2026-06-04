@@ -1,33 +1,18 @@
-# v1.0.0 Thesis Prototype
+﻿# Release notes
 
-First public thesis prototype of AI Skill Navigator.
+## Thesis demo version
 
-## Included features
+Final academic prototype prepared for thesis demonstration.
 
-- AI Tutor.
-- Course-material-grounded tutoring.
-- Quiz generation.
-- Mind map generation.
-- XR scenario generation.
-- Teacher materials area.
-- Student and teacher dashboards.
-- RAG-oriented material support.
+Main improvements:
 
-## Architecture
-
-The AI layer has been refactored around:
-
-- Strategy Pattern for AI providers;
-- Factory Method for provider creation;
-- Facade Pattern for AI workflows.
-
-## Quality focus
-
-The prototype documents and applies SOLID principles and quality attributes such as maintainability, reusability, portability, robustness, verifiability and comprehensibility.
-
-## Provider note
-
-The current demo setup uses the DeepSeek API through a dedicated DeepSeek provider built on the OpenAI-compatible strategy.
-
-Ollama remains available as an optional local provider.
-
+- AI Course Builder for prompt-based Moodle course editing.
+- AI Tutor and course-aware tutoring.
+- Quiz and assessment generation.
+- Mind Map Generator.
+- AI Simulator Finder.
+- Saved simulations with list and detail pages.
+- RAG/material management support.
+- Teacher analytics and learning-gap analysis.
+- Provider abstraction for multiple AI backends.
+- Documentation for architecture, design patterns, SOLID principles and quality goals.
