@@ -705,6 +705,75 @@ $assessments = local_aisn_ass_table_exists('local_aiskillnav_assessment')
 echo $OUTPUT->header();
 local_aiskillnavigator_print_inline_styles();
 echo html_writer::tag('style', <<<'CSS'
+/* AISN_INITIAL_FINAL_MATERIAL_VISIBILITY_FIX_V1 */
+/* I materiali devono comparire solo per il final test, non per initial/pre-test. */
+body.path-local-aiskillnavigator #aisn-final-material-source {
+    display: none !important;
+}
+
+body.path-local-aiskillnavigator #aisn-final-material-source.aisn-visible-for-final {
+    display: block !important;
+}
+
+body.path-local-aiskillnavigator .aisn-final-material-note {
+    background: #eef7ff !important;
+    border: 1px solid #bfdbfe !important;
+    color: #0f3b68 !important;
+    border-radius: 14px !important;
+    padding: 10px 14px !important;
+    margin: 12px 0 0 0 !important;
+    font-weight: 700 !important;
+}
+CSS);
+
+echo html_writer::script(<<<'JS'
+// AISN_INITIAL_FINAL_MATERIAL_VISIBILITY_FIX_V1
+(function () {
+    function updateInitialFinalMaterialsVisibility() {
+        var type = document.getElementById('assessmenttype');
+        var box = document.getElementById('aisn-final-material-source');
+
+        if (!type || !box) {
+            return;
+        }
+
+        var isFinal = String(type.value || '').toLowerCase() === 'final';
+
+        if (isFinal) {
+            box.classList.add('aisn-visible-for-final');
+            box.style.setProperty('display', 'block', 'important');
+        } else {
+            box.classList.remove('aisn-visible-for-final');
+            box.style.setProperty('display', 'none', 'important');
+        }
+
+        box.querySelectorAll('input, select, textarea, button').forEach(function (el) {
+            if (isFinal) {
+                el.removeAttribute('disabled');
+            } else {
+                el.setAttribute('disabled', 'disabled');
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', updateInitialFinalMaterialsVisibility);
+    } else {
+        updateInitialFinalMaterialsVisibility();
+    }
+
+    document.addEventListener('change', function (event) {
+        if (event.target && event.target.id === 'assessmenttype') {
+            updateInitialFinalMaterialsVisibility();
+        }
+    });
+
+    setTimeout(updateInitialFinalMaterialsVisibility, 100);
+    setTimeout(updateInitialFinalMaterialsVisibility, 500);
+})();
+JS);
+
+echo html_writer::tag('style', <<<'CSS'
 /* AISN_ASS_FORM_VISUAL_FIX_V1 */
 body.path-local-aiskillnavigator .card .card-body form .form-group {
     display: block !important;
