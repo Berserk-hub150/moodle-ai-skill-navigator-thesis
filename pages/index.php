@@ -85,11 +85,13 @@ function local_aisn_index_stat_card(string $value, string $label, string $class 
     return $html;
 }
 
-$isteacher = local_aisn_index_can_manage($context);
-// AISN_ADMIN_SEES_BOTH_SIDES_V1
-// Admin/docenti vedono sia strumenti docente sia strumenti studente.
-// Gli studenti normali vedono solo la parte studente.
-$isstudent = is_enrolled($context, $USER, '', true) || $isteacher || is_siteadmin();
+$isadmin = is_siteadmin();
+// AISN_ADMIN_ONLY_SEES_BOTH_SIDES_V2
+// Admin vede sia strumenti docente sia strumenti studente.
+// Docente vede solo strumenti docente.
+// Studente vede solo strumenti studente.
+$isteacher = local_aisn_index_can_manage($context) || $isadmin;
+$isstudent = $isadmin || (is_enrolled($context, $USER, '', true) && !$isteacher);
 
 echo $OUTPUT->header();
 

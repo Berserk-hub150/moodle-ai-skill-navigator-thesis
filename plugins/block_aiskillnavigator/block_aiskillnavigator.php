@@ -51,10 +51,13 @@ class block_aiskillnavigator extends block_base {
         $courseid = !empty($COURSE->id) ? (int)$COURSE->id : SITEID;
         $context = context_course::instance($courseid);
 
-        $isteacher = $this->can_manage_course($context) || is_siteadmin();
-        // AISN_BLOCK_ADMIN_SEES_BOTH_SIDES_V1
-        // Admin/docenti vedono sia strumenti studente sia strumenti docente anche nel blocco laterale.
-        $isstudent = is_enrolled($context, $USER, '', true) || $isteacher || is_siteadmin();
+        $isadmin = is_siteadmin();
+        // AISN_BLOCK_ADMIN_ONLY_SEES_BOTH_SIDES_V2
+        // Admin vede sia strumenti docente sia strumenti studente nel blocco laterale.
+        // Docente vede solo strumenti docente.
+        // Studente vede solo strumenti studente.
+        $isteacher = $this->can_manage_course($context) || $isadmin;
+        $isstudent = $isadmin || (is_enrolled($context, $USER, '', true) && !$this->can_manage_course($context));
 
         $html = html_writer::start_div('aisn-block-role-based');
         $html .= html_writer::tag('p', 'Course-aware AI tools for students and teachers.', ['style' => 'font-size:13px;color:#475569;']);
