@@ -86,7 +86,10 @@ function local_aisn_index_stat_card(string $value, string $label, string $class 
 }
 
 $isteacher = local_aisn_index_can_manage($context);
-$isstudent = is_enrolled($context, $USER, '', true) && !$isteacher;
+// AISN_ADMIN_SEES_BOTH_SIDES_V1
+// Admin/docenti vedono sia strumenti docente sia strumenti studente.
+// Gli studenti normali vedono solo la parte studente.
+$isstudent = is_enrolled($context, $USER, '', true) || $isteacher || is_siteadmin();
 
 echo $OUTPUT->header();
 
@@ -184,7 +187,9 @@ if ($isteacher) {
     );
     echo html_writer::end_div();
 
-} else if ($isstudent) {
+}
+
+if ($isstudent) {
     echo html_writer::tag(
         'p',
         'Student workspace for course-aware AI tutoring, quizzes, assessments and adaptive review.',
