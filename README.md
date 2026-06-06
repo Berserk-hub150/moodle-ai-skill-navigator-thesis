@@ -1,10 +1,6 @@
 # AI Skill Navigator
 
 <p align="center">
-  <img src="assets/readme/hero-banner.png" alt="AI Skill Navigator banner" width="100%">
-</p>
-
-<p align="center">
   AI-powered Moodle plugin for tutoring, quizzes, mind maps, XR scenarios and teacher analytics.
 </p>
 
