@@ -1,13 +1,6 @@
-﻿.DS_Store
-Thumbs.db
-*.log
-*.tmp
-*.bak
-*.zip
-*.7z
-*.rar
-node_modules/
-vendor/
-.env
-
+﻿# Local backup files
 *.bak*
+*.bak_*
+*.backup
+backup_*/
+**/backup_*/
