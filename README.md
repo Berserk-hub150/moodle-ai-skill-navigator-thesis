@@ -1,5 +1,8 @@
-# AI Skill Navigator
+﻿# AI Skill Navigator
 
+<p align="center">
+  <img src="assets/readme/hero-banner.png" alt="AI Skill Navigator banner" width="100%">
+</p>
 <p align="center">
   <img src="https://img.shields.io/badge/Moodle-Plugin-orange" alt="Moodle Plugin">
   <img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue" alt="License: GPL-3.0-or-later">
@@ -88,3 +91,4 @@ API keys are not stored in the repository and must be configured locally through
 This project is licensed under the GNU General Public License v3.0 or later.
 
 SPDX-License-Identifier: `GPL-3.0-or-later`
+
