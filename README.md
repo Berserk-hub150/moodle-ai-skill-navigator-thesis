@@ -1,4 +1,4 @@
-﻿# AI Skill Navigator
+
 
 <p align="center">
   <img src="assets/readme/hero-banner.png" alt="AI Skill Navigator banner" width="100%">
