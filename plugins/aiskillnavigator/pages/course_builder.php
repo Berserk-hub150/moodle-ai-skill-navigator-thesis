@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once(__DIR__ . '/../../../config.php');
 require_once(__DIR__ . '/../includes/back_to_course_helper.php');
 require_once($CFG->dirroot . '/course/lib.php');
@@ -7,6 +7,7 @@ require_once($CFG->dirroot . '/mod/resource/lib.php');
 require_once($CFG->libdir . '/filelib.php');
 require_once(__DIR__ . '/../includes/ui_style_helper.php');
 require_once(__DIR__ . '/../includes/upload_guard.php');
+require_once(__DIR__ . '/../includes/production_guard.php');
 require_once(__DIR__ . '/../includes/course_resource_sync.php');
 require_once(__DIR__ . '/../classes/service/ai_provider_interface.php');
 require_once(__DIR__ . '/../classes/service/ai_provider_factory.php');
@@ -57,13 +58,13 @@ function local_aisn_cb_section_text(string $text): string {
     $text = str_replace(["\xC2\xA0", "\t", "\r", "\n"], ' ', $text);
     $text = preg_replace('/\s+/u', ' ', (string)$text);
     $text = trim((string)$text);
-    $text = trim($text, " \t\n\r\0\x0B\"'.,:;()[]{}“”‘’«»");
+    $text = trim($text, " \t\n\r\0\x0B\"'.,:;()[]{}â€œâ€â€˜â€™Â«Â»");
 
     $text = preg_replace('/^(?:la|il|lo|una|un)\s+/iu', '', (string)$text);
     $text = preg_replace('/^(?:sezione|sezioni|section)\s+/iu', '', (string)$text);
     $text = preg_replace('/\s+(?:del corso|nel corso|corrente)$/iu', '', (string)$text);
     $text = trim((string)$text);
-    $text = trim($text, " \t\n\r\0\x0B\"'.,:;()[]{}“”‘’«»");
+    $text = trim($text, " \t\n\r\0\x0B\"'.,:;()[]{}â€œâ€â€˜â€™Â«Â»");
     $text = preg_replace('/\s+/u', ' ', (string)$text);
 
     return trim((string)$text);
@@ -435,7 +436,7 @@ function local_aisn_cb_prompt_singular_section_request(string $prompt): bool {
 function local_aisn_cb_command_title_clean(string $raw): string {
     $title = html_entity_decode(strip_tags($raw), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $title = preg_replace('/\s+/u', ' ', (string)$title);
-    $title = trim((string)$title, " \t\n\r\0\x0B\"'.,:;()[]{}“”‘’«»");
+    $title = trim((string)$title, " \t\n\r\0\x0B\"'.,:;()[]{}â€œâ€â€˜â€™Â«Â»");
 
     $title = preg_replace('/^(?:una|unica|sola|solo una|nuova)\s+/iu', '', (string)$title);
     $title = preg_replace('/^(?:sezione|section)\s+/iu', '', (string)$title);
@@ -473,9 +474,9 @@ function local_aisn_cb_command_title_clean(string $raw): string {
 
 function local_aisn_cb_extract_named_section_title(string $prompt): ?string {
     $patterns = [
-        '/\b(?:chiamala|chiamarlo|chiamalo|chiamarla|chiamata|chiamato|intitolata|intitolato)\s+["“”\'«»]?(.+?)(?:["“”\'«»]|\s+(?:mettendoci|mettici|metti|inserendo|contenente|che contiene|con|e\s+per quanto riguarda)\b|[\r\n.;:]|$)/iu',
-        '/\bsezione\s+(?:chiamata|chiamato|di nome|intitolata|intitolato)\s+["“”\'«»]?(.+?)(?:["“”\'«»]|\s+(?:mettendoci|mettici|metti|inserendo|contenente|che contiene|con|e\s+per quanto riguarda)\b|[\r\n.;:]|$)/iu',
-        '/\b(?:crea|creami|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+["“”\'«»]?(.+?)(?:["“”\'«»]|\s+(?:mettendoci|mettici|metti|inserendo|contenente|che contiene|con|e\s+per quanto riguarda)\b|[\r\n.;:]|$)/iu',
+        '/\b(?:chiamala|chiamarlo|chiamalo|chiamarla|chiamata|chiamato|intitolata|intitolato)\s+["â€œâ€\'Â«Â»]?(.+?)(?:["â€œâ€\'Â«Â»]|\s+(?:mettendoci|mettici|metti|inserendo|contenente|che contiene|con|e\s+per quanto riguarda)\b|[\r\n.;:]|$)/iu',
+        '/\bsezione\s+(?:chiamata|chiamato|di nome|intitolata|intitolato)\s+["â€œâ€\'Â«Â»]?(.+?)(?:["â€œâ€\'Â«Â»]|\s+(?:mettendoci|mettici|metti|inserendo|contenente|che contiene|con|e\s+per quanto riguarda)\b|[\r\n.;:]|$)/iu',
+        '/\b(?:crea|creami|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+["â€œâ€\'Â«Â»]?(.+?)(?:["â€œâ€\'Â«Â»]|\s+(?:mettendoci|mettici|metti|inserendo|contenente|che contiene|con|e\s+per quanto riguarda)\b|[\r\n.;:]|$)/iu',
     ];
 
     foreach ($patterns as $pattern) {
@@ -515,7 +516,7 @@ function local_aisn_cb_delete_section(int $courseid, stdClass $section): string 
 
     local_aisn_cb_set_visibility($section, false);
 
-    return 'nascosta perché course_delete_section non è disponibile';
+    return 'nascosta perchÃ© course_delete_section non Ã¨ disponibile';
 }
 
 function local_aisn_cb_duplicate_section(int $courseid, stdClass $source, string $newtitle = ''): stdClass {
@@ -809,7 +810,7 @@ function local_aisn_cb_attach_files_to_section(int $courseid, int $userid, stdCl
         $existingcmid = local_aisn_cb_existing_resource_cmid($courseid, $sectionnum, $resourcename);
 
         if ($existingcmid > 0) {
-            $logs[] = 'File "' . $filename . '" già presente nella sezione "' . (string)$section->name . '": duplicato non creato.';
+            $logs[] = 'File "' . $filename . '" giÃ  presente nella sezione "' . (string)$section->name . '": duplicato non creato.';
             continue;
         }
 
@@ -825,7 +826,7 @@ function local_aisn_cb_attach_files_to_section(int $courseid, int $userid, stdCl
     $removed = local_aisn_cb_cleanup_duplicate_resources_in_course($courseid);
 
     if ($removed > 0) {
-        $logs[] = 'Pulizia production: rimossi ' . $removed . ' materiali duplicati già presenti nel corso.';
+        $logs[] = 'Pulizia production: rimossi ' . $removed . ' materiali duplicati giÃ  presenti nel corso.';
     }
 
     return $logs;
@@ -904,15 +905,15 @@ function local_aisn_cb_extract_delete_target(string $prompt): ?string {
     }
 
     $patterns = [
-        '/\b(?:togli|elimina|cancella|rimuovi|rimuovere|cancellare|eliminare)\s+(?:la\s+)?sezione\s+["“”\'«»]?([^"“”\'«»\r\n]+)["“”\'«»]?/iu',
-        '/\b(?:togli|elimina|cancella|rimuovi)\s+["“”\'«»]([^"“”\'«»\r\n]+)["“”\'«»]/iu',
+        '/\b(?:togli|elimina|cancella|rimuovi|rimuovere|cancellare|eliminare)\s+(?:la\s+)?sezione\s+["â€œâ€\'Â«Â»]?([^"â€œâ€\'Â«Â»\r\n]+)["â€œâ€\'Â«Â»]?/iu',
+        '/\b(?:togli|elimina|cancella|rimuovi)\s+["â€œâ€\'Â«Â»]([^"â€œâ€\'Â«Â»\r\n]+)["â€œâ€\'Â«Â»]/iu',
     ];
 
     foreach ($patterns as $pattern) {
         if (preg_match($pattern, $prompt, $matches)) {
             $target = local_aisn_cb_command_title_clean((string)$matches[1]);
             $target = preg_replace('/\s+(?:dal|del|nel)\s+corso.*$/iu', '', (string)$target);
-            $target = trim((string)$target, " \t\n\r\0\x0B\"'“”«».:;");
+            $target = trim((string)$target, " \t\n\r\0\x0B\"'â€œâ€Â«Â».:;");
 
             return $target !== '' ? $target : null;
         }
@@ -929,8 +930,8 @@ function local_aisn_cb_extract_target_section(string $prompt): ?string {
     }
 
     $patterns = [
-        '/(?:nella|alla|dentro la|sotto la|in)\s+sezione\s+["“”\'«»]?([^"“”\'«».:,;\n\r]+)["“”\'«»]?/iu',
-        '/sezione\s+["“”\'«»]([^"“”\'«»]+)["“”\'«»]/iu',
+        '/(?:nella|alla|dentro la|sotto la|in)\s+sezione\s+["â€œâ€\'Â«Â»]?([^"â€œâ€\'Â«Â».:,;\n\r]+)["â€œâ€\'Â«Â»]?/iu',
+        '/sezione\s+["â€œâ€\'Â«Â»]([^"â€œâ€\'Â«Â»]+)["â€œâ€\'Â«Â»]/iu',
     ];
 
     foreach ($patterns as $pattern) {
@@ -953,7 +954,7 @@ function local_aisn_cb_extract_create_section_titles(string $prompt): array {
     }
 
     $patterns = [
-        '/(?:crea|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+["“”\'«»]([^"“”\'«»]+)["“”\'«»]/iu',
+        '/(?:crea|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+["â€œâ€\'Â«Â»]([^"â€œâ€\'Â«Â»]+)["â€œâ€\'Â«Â»]/iu',
         '/(?:crea|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+([^\.;\n\r]+)/iu',
     ];
 
@@ -1001,8 +1002,8 @@ function local_aisn_cb_set_section_summary_html(stdClass $section, string $html)
 
 function local_aisn_cb_extract_text_section_request(string $prompt): ?array {
     $patterns = [
-        '/\b(?:crea|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+(?:chiamata|chiamato|di nome|intitolata|intitolato)?\s*["“”\'«»]?(.+?)["“”\'«»]?\s+(?:mettendoci|mettici|metti|inserendo|con|contenente|che contiene)\s+(?:questo\s+)?(?:testo|contenuto)\s*:?\s*([\s\S]+)/iu',
-        '/\b(?:crea|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+["“”\'«»]?([^"“”\'«»\r\n:]+)["“”\'«»]?\s*:\s*([\s\S]+)/iu',
+        '/\b(?:crea|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+(?:chiamata|chiamato|di nome|intitolata|intitolato)?\s*["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s+(?:mettendoci|mettici|metti|inserendo|con|contenente|che contiene)\s+(?:questo\s+)?(?:testo|contenuto)\s*:?\s*([\s\S]+)/iu',
+        '/\b(?:crea|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+["â€œâ€\'Â«Â»]?([^"â€œâ€\'Â«Â»\r\n:]+)["â€œâ€\'Â«Â»]?\s*:\s*([\s\S]+)/iu',
     ];
 
     foreach ($patterns as $pattern) {
@@ -1031,11 +1032,11 @@ function local_aisn_cb_prompt_wants_existing_file_routing(string $prompt): bool 
     $p = local_aisn_cb_low($prompt);
 
     return (
-        str_contains($p, 'sezioni già create') ||
+        str_contains($p, 'sezioni giÃ  create') ||
         str_contains($p, 'sezioni gia create') ||
         str_contains($p, 'sezioni esistenti') ||
         str_contains($p, 'sezione esistente') ||
-        str_contains($p, 'già create') ||
+        str_contains($p, 'giÃ  create') ||
         str_contains($p, 'gia create') ||
         str_contains($p, 'relative sezioni') ||
         str_contains($p, 'sezione corretta') ||
@@ -1168,7 +1169,7 @@ function local_aisn_cb_attach_files_to_existing_sections(int $courseid, int $use
     }
 
     local_aisn_cb_sync_resources($courseid);
-    $logs[] = 'RAG sync saltato in modalità demo veloce.';
+    $logs[] = 'RAG sync saltato in modalitÃ  demo veloce.';
 
     return $logs;
 }
@@ -1185,13 +1186,13 @@ function local_aisn_cb_safe_title_clean(string $title): string {
     $title = preg_replace('/\s+(?:e\s+)?(?:per quanto riguarda|mettendoci|mettici|metti|inserendo|contenente|che contiene|con questo testo|con il testo|con contenuto|con il contenuto)\b[\s\S]*$/iu', '', $title);
     $title = preg_replace('/\s+(?:non creare|senza creare|limitati|solo|soltanto)\b[\s\S]*$/iu', '', $title);
 
-    $title = trim((string)$title, " \t\n\r\0\x0B\"'“”‘’«».,:;");
+    $title = trim((string)$title, " \t\n\r\0\x0B\"'â€œâ€â€˜â€™Â«Â».,:;");
 
     if (function_exists('local_aisn_cb_command_title_clean')) {
         $title = local_aisn_cb_command_title_clean($title);
     }
 
-    $title = trim((string)$title, " \t\n\r\0\x0B\"'“”‘’«».,:;");
+    $title = trim((string)$title, " \t\n\r\0\x0B\"'â€œâ€â€˜â€™Â«Â».,:;");
 
     if ($title === '') {
         return '';
@@ -1210,7 +1211,7 @@ function local_aisn_cb_safe_is_conservative(string $prompt): bool {
     return str_contains($p, 'non creare nuove sezioni')
         || str_contains($p, 'non creare altre sezioni')
         || str_contains($p, 'senza creare nuove sezioni')
-        || str_contains($p, 'sezioni già create')
+        || str_contains($p, 'sezioni giÃ  create')
         || str_contains($p, 'sezioni gia create')
         || str_contains($p, 'sezioni esistenti')
         || str_contains($p, 'sezione esistente')
@@ -1238,8 +1239,8 @@ function local_aisn_cb_safe_wants_one_section_per_file(string $prompt): bool {
 
 function local_aisn_cb_safe_extract_text_section(string $prompt): ?array {
     $patterns = [
-        '/\b(?:crea|creami|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+(?:chiamata|chiamato|di nome|intitolata|intitolato)?\s*["“”\'«»]?(.+?)["“”\'«»]?\s+(?:mettendoci|mettici|metti|inserendo|contenente|che contiene|con)\s+(?:questo\s+)?(?:testo|contenuto)?\s*:?\s*([\s\S]+)/iu',
-        '/\b(?:crea|creami|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+["“”\'«»]?([^"“”\'«»\r\n:]+)["“”\'«»]?\s*:\s*([\s\S]+)/iu',
+        '/\b(?:crea|creami|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+(?:chiamata|chiamato|di nome|intitolata|intitolato)?\s*["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s+(?:mettendoci|mettici|metti|inserendo|contenente|che contiene|con)\s+(?:questo\s+)?(?:testo|contenuto)?\s*:?\s*([\s\S]+)/iu',
+        '/\b(?:crea|creami|aggiungi|inserisci)\s+(?:una\s+|unica\s+|sola\s+|nuova\s+)?sezione\s+["â€œâ€\'Â«Â»]?([^"â€œâ€\'Â«Â»\r\n:]+)["â€œâ€\'Â«Â»]?\s*:\s*([\s\S]+)/iu',
     ];
 
     foreach ($patterns as $pattern) {
@@ -1286,7 +1287,7 @@ function local_aisn_cb_safe_body_to_html(string $body): string {
             || preg_match('/^[\p{L}0-9 .\/\-]+:\s*$/u', $line);
 
         $isdate = preg_match('/^\d{2}\/\d{2}\/\d{4}$/u', $line);
-        $isbullet = preg_match('/^(?:[-*•]\s+|\d+\.\s+)/u', $line);
+        $isbullet = preg_match('/^(?:[-*â€¢]\s+|\d+\.\s+)/u', $line);
 
         if ($isheading) {
             if ($inlist) {
@@ -1304,7 +1305,7 @@ function local_aisn_cb_safe_body_to_html(string $body): string {
                 $inlist = true;
             }
 
-            $line = preg_replace('/^(?:[-*•]\s+|\d+\.\s+)/u', '', $line);
+            $line = preg_replace('/^(?:[-*â€¢]\s+|\d+\.\s+)/u', '', $line);
             $html .= '<li>' . s($line) . '</li>';
             continue;
         }
@@ -1339,9 +1340,9 @@ function local_aisn_cb_safe_set_section_summary(stdClass $section, string $html)
 
 function local_aisn_cb_safe_extract_target(string $prompt): ?string {
     $patterns = [
-        '/\b(?:nella sezione|alla sezione|dentro la sezione|in sezione)\s+["“”\'«»]([^"“”\'«»]+)["“”\'«»]/iu',
+        '/\b(?:nella sezione|alla sezione|dentro la sezione|in sezione)\s+["â€œâ€\'Â«Â»]([^"â€œâ€\'Â«Â»]+)["â€œâ€\'Â«Â»]/iu',
         '/\b(?:nella|alla|dentro la)\s+sezione\s+([^.;\r\n]+?)(?:\s+non creare|\s+senza creare|[.;\r\n]|$)/iu',
-        '/\b(?:sezione|section)\s+["“”\'«»]([^"“”\'«»]+)["“”\'«»]/iu',
+        '/\b(?:sezione|section)\s+["â€œâ€\'Â«Â»]([^"â€œâ€\'Â«Â»]+)["â€œâ€\'Â«Â»]/iu',
     ];
 
     foreach ($patterns as $pattern) {
@@ -1475,7 +1476,7 @@ function local_aisn_cb_safe_attach_existing(int $courseid, int $userid, array $f
     }
 
     local_aisn_cb_sync_resources($courseid);
-    $logs[] = 'Modalità sicura: nessuna sezione inventata dai nomi dei file.';
+    $logs[] = 'ModalitÃ  sicura: nessuna sezione inventata dai nomi dei file.';
 
     return $logs;
 }
@@ -1502,7 +1503,7 @@ function local_aisn_cb_safe_extract_section_list(string $prompt): array {
             continue;
         }
 
-        if (preg_match('/^\s*(?:\d+[\).:-]\s+|[-*•]\s+)(.+)$/u', $line, $matches)) {
+        if (preg_match('/^\s*(?:\d+[\).:-]\s+|[-*â€¢]\s+)(.+)$/u', $line, $matches)) {
             $title = local_aisn_cb_safe_title_clean((string)$matches[1]);
 
             if ($title !== '' && core_text::strlen($title) <= 100) {
@@ -1517,7 +1518,7 @@ function local_aisn_cb_safe_extract_section_list(string $prompt): array {
 function local_aisn_cb_content_edit_clean_value(string $value): string {
     $value = trim((string)$value);
     $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    $value = trim($value, " \t\n\r\0\x0B\"'“”‘’«».,;");
+    $value = trim($value, " \t\n\r\0\x0B\"'â€œâ€â€˜â€™Â«Â».,;");
 
     return $value;
 }
@@ -1536,8 +1537,8 @@ function local_aisn_cb_content_edit_extract(string $prompt): ?array {
     $prompt = trim((string)$prompt);
 
     $replacepatterns = [
-        '/(?:nel|nella|dentro\s+il|all’interno\s+del|all\'interno\s+del)?\s*contenuto\s+della\s+sezione\s+["“”\'«»]?(.+?)["“”\'«»]?\s+sostituisci\s+(.+?)\s+con\s+(.+)$/iu',
-        '/(?:nella\s+sezione|sezione)\s+["“”\'«»]?(.+?)["“”\'«»]?\s+sostituisci\s+(.+?)\s+con\s+(.+)$/iu',
+        '/(?:nel|nella|dentro\s+il|allâ€™interno\s+del|all\'interno\s+del)?\s*contenuto\s+della\s+sezione\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s+sostituisci\s+(.+?)\s+con\s+(.+)$/iu',
+        '/(?:nella\s+sezione|sezione)\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s+sostituisci\s+(.+?)\s+con\s+(.+)$/iu',
     ];
 
     foreach ($replacepatterns as $pattern) {
@@ -1558,9 +1559,9 @@ function local_aisn_cb_content_edit_extract(string $prompt): ?array {
     }
 
     $removepatterns = [
-        '/(?:nel|nella|dentro\s+il|all’interno\s+del|all\'interno\s+del)?\s*contenuto\s+della\s+sezione\s+["“”\'«»]?(.+?)["“”\'«»]?\s+(?:togli|rimuovi|elimina|cancella)\s+(.+)$/iu',
-        '/(?:togli|rimuovi|elimina|cancella)\s+(.+?)\s+(?:dal|dalla)\s+contenuto\s+della\s+sezione\s+["“”\'«»]?(.+?)["“”\'«»]?$/iu',
-        '/(?:togli|rimuovi|elimina|cancella)\s+(.+?)\s+(?:dalla|nella)\s+sezione\s+["“”\'«»]?(.+?)["“”\'«»]?$/iu',
+        '/(?:nel|nella|dentro\s+il|allâ€™interno\s+del|all\'interno\s+del)?\s*contenuto\s+della\s+sezione\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s+(?:togli|rimuovi|elimina|cancella)\s+(.+)$/iu',
+        '/(?:togli|rimuovi|elimina|cancella)\s+(.+?)\s+(?:dal|dalla)\s+contenuto\s+della\s+sezione\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?$/iu',
+        '/(?:togli|rimuovi|elimina|cancella)\s+(.+?)\s+(?:dalla|nella)\s+sezione\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?$/iu',
     ];
 
     foreach ($removepatterns as $i => $pattern) {
@@ -1698,7 +1699,7 @@ function local_aisn_cb_content_edit_try_handle(int $courseid, string $prompt, ar
 function local_aisn_cb_brutal_content_clean_value(string $value): string {
     $value = trim((string)$value);
     $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    $value = trim($value, " \t\n\r\0\x0B\"'“”‘’«».,;:");
+    $value = trim($value, " \t\n\r\0\x0B\"'â€œâ€â€˜â€™Â«Â».,;:");
 
     return $value;
 }
@@ -1752,8 +1753,8 @@ function local_aisn_cb_brutal_content_extract(string $prompt): ?array {
     $removeverb = '(?:eliminami|eliminiami|elimina|rimuovimi|rimuovi|toglimi|togli|cancellami|cancella|levami|leva)';
 
     $repairpatterns = [
-        '/^(?:ripara|formatta|sistema)\s+(?:il\s+)?contenuto\s+(?:della\s+)?sezione\s+["“”\'«»]?(.+?)["“”\'«»]?\s*$/iu',
-        '/^(?:ripara|formatta|sistema)\s+(?:la\s+)?sezione\s+["“”\'«»]?(.+?)["“”\'«»]?\s*$/iu',
+        '/^(?:ripara|formatta|sistema)\s+(?:il\s+)?contenuto\s+(?:della\s+)?sezione\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s*$/iu',
+        '/^(?:ripara|formatta|sistema)\s+(?:la\s+)?sezione\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s*$/iu',
     ];
 
     foreach ($repairpatterns as $pattern) {
@@ -1770,8 +1771,8 @@ function local_aisn_cb_brutal_content_extract(string $prompt): ?array {
     }
 
     $replacepatterns = [
-        '/^(?:nel|nella|dentro\s+il)?\s*contenuto\s+della\s+sezione\s+["“”\'«»]?(.+?)["“”\'«»]?\s+sostituisci\s+(.+?)\s+con\s+(.+)$/iu',
-        '/^sostituisci\s+(.+?)\s+con\s+(.+?)\s+(?:nel|nella|dal|dalla)\s+(?:contenuto\s+(?:della\s+)?sezione|sezione)\s+["“”\'«»]?(.+?)["“”\'«»]?\s*$/iu',
+        '/^(?:nel|nella|dentro\s+il)?\s*contenuto\s+della\s+sezione\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s+sostituisci\s+(.+?)\s+con\s+(.+)$/iu',
+        '/^sostituisci\s+(.+?)\s+con\s+(.+?)\s+(?:nel|nella|dal|dalla)\s+(?:contenuto\s+(?:della\s+)?sezione|sezione)\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s*$/iu',
     ];
 
     foreach ($replacepatterns as $i => $pattern) {
@@ -1798,9 +1799,9 @@ function local_aisn_cb_brutal_content_extract(string $prompt): ?array {
     }
 
     $removepatterns = [
-        '/^(?:nel|nella|dentro\s+il)?\s*contenuto\s+della\s+sezione\s+["“”\'«»]?(.+?)["“”\'«»]?\s+' . $removeverb . '\s+(.+)$/iu',
-        '/^' . $removeverb . '\s+(.+?)\s+(?:dal|dalla|nel|nella)\s+(?:contenuto\s+(?:della\s+)?sezione|sezione)\s+["“”\'«»]?(.+?)["“”\'«»]?\s*$/iu',
-        '/^' . $removeverb . '\s+(.+?)\s+(?:dalla|nella)\s+sezione\s+["“”\'«»]?(.+?)["“”\'«»]?\s*$/iu',
+        '/^(?:nel|nella|dentro\s+il)?\s*contenuto\s+della\s+sezione\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s+' . $removeverb . '\s+(.+)$/iu',
+        '/^' . $removeverb . '\s+(.+?)\s+(?:dal|dalla|nel|nella)\s+(?:contenuto\s+(?:della\s+)?sezione|sezione)\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s*$/iu',
+        '/^' . $removeverb . '\s+(.+?)\s+(?:dalla|nella)\s+sezione\s+["â€œâ€\'Â«Â»]?(.+?)["â€œâ€\'Â«Â»]?\s*$/iu',
     ];
 
     foreach ($removepatterns as $i => $pattern) {
@@ -2032,7 +2033,7 @@ function local_aisn_cb_ui_editor_v2_low(string $value): string {
 function local_aisn_cb_ui_editor_v2_clean(string $value): string {
     $value = trim((string)$value);
     $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    $value = trim($value, " \t\n\r\0\x0B\"'“”‘’«».,;:");
+    $value = trim($value, " \t\n\r\0\x0B\"'â€œâ€â€˜â€™Â«Â».,;:");
 
     return $value;
 }
@@ -2083,9 +2084,9 @@ function local_aisn_cb_ui_editor_v2_find_section(int $courseid, string $sectionn
 
 function local_aisn_cb_ui_editor_v2_section_from_prompt(int $courseid, string $prompt): ?stdClass {
     $patterns = [
-        '/(?:contenuto\s+della\s+sezione|sezione)\s+["“”\'«»]([^"“”\'«»]+)["“”\'«»]/iu',
-        '/(?:contenuto\s+della\s+sezione|sezione)\s+([A-Za-z0-9À-ÿ _\-.]+?)(?:\s+dal|\s+nel|\s+con|\s+e\s+|\s*$)/iu',
-        '/(?:dal|dalla|nel|nella)\s+(?:contenuto\s+(?:della\s+)?sezione|sezione)\s+["“”\'«»]?([A-Za-z0-9À-ÿ _\-.]+)["“”\'«»]?/iu',
+        '/(?:contenuto\s+della\s+sezione|sezione)\s+["â€œâ€\'Â«Â»]([^"â€œâ€\'Â«Â»]+)["â€œâ€\'Â«Â»]/iu',
+        '/(?:contenuto\s+della\s+sezione|sezione)\s+([A-Za-z0-9Ã€-Ã¿ _\-.]+?)(?:\s+dal|\s+nel|\s+con|\s+e\s+|\s*$)/iu',
+        '/(?:dal|dalla|nel|nella)\s+(?:contenuto\s+(?:della\s+)?sezione|sezione)\s+["â€œâ€\'Â«Â»]?([A-Za-z0-9Ã€-Ã¿ _\-.]+)["â€œâ€\'Â«Â»]?/iu',
     ];
 
     foreach ($patterns as $pattern) {
@@ -2304,8 +2305,8 @@ function local_aisn_cb_ui_editor_v2_extract_remove_text(string $prompt): string 
     $removeverb = '(?:eliminami|eliminiami|elimina|rimuovimi|rimuovi|toglimi|togli|cancellami|cancella|levami|leva)';
 
     $patterns = [
-        '/^' . $removeverb . '\s+(.+?)\s+(?:dal|dalla|nel|nella)\s+(?:contenuto\s+(?:della\s+)?sezione|sezione)\s+["“”\'«»]?.+?["“”\'«»]?\s*$/iu',
-        '/^(?:nel|nella)?\s*contenuto\s+della\s+sezione\s+["“”\'«»]?.+?["“”\'«»]?\s+' . $removeverb . '\s+(.+)$/iu',
+        '/^' . $removeverb . '\s+(.+?)\s+(?:dal|dalla|nel|nella)\s+(?:contenuto\s+(?:della\s+)?sezione|sezione)\s+["â€œâ€\'Â«Â»]?.+?["â€œâ€\'Â«Â»]?\s*$/iu',
+        '/^(?:nel|nella)?\s*contenuto\s+della\s+sezione\s+["â€œâ€\'Â«Â»]?.+?["â€œâ€\'Â«Â»]?\s+' . $removeverb . '\s+(.+)$/iu',
     ];
 
     foreach ($patterns as $pattern) {
@@ -2319,8 +2320,8 @@ function local_aisn_cb_ui_editor_v2_extract_remove_text(string $prompt): string 
 
 function local_aisn_cb_ui_editor_v2_extract_replace(string $prompt): ?array {
     $patterns = [
-        '/sostituisci\s+(.+?)\s+con\s+(.+?)\s+(?:nel|nella|dal|dalla)\s+(?:contenuto\s+(?:della\s+)?sezione|sezione)\s+["“”\'«»]?.+?["“”\'«»]?\s*$/iu',
-        '/(?:contenuto\s+della\s+sezione|sezione)\s+["“”\'«»]?.+?["“”\'«»]?\s+sostituisci\s+(.+?)\s+con\s+(.+)$/iu',
+        '/sostituisci\s+(.+?)\s+con\s+(.+?)\s+(?:nel|nella|dal|dalla)\s+(?:contenuto\s+(?:della\s+)?sezione|sezione)\s+["â€œâ€\'Â«Â»]?.+?["â€œâ€\'Â«Â»]?\s*$/iu',
+        '/(?:contenuto\s+della\s+sezione|sezione)\s+["â€œâ€\'Â«Â»]?.+?["â€œâ€\'Â«Â»]?\s+sostituisci\s+(.+?)\s+con\s+(.+)$/iu',
     ];
 
     foreach ($patterns as $pattern) {
@@ -2634,14 +2635,14 @@ function local_aisn_cb_ai_editor_try_handle(int $courseid, string $teacherprompt
 
         . "DATE_CONTEXT_CALCOLATO_DAL_SERVER:\n"
         . json_encode($datefacts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n"
-        . "Usa DATE_CONTEXT_CALCOLATO_DAL_SERVER per tutti i prompt con date, oggi, domani, prossimo, più vicino, più lontano, appelli, scadenze.\n"
-        . "Se il docente chiede la data più vicina a oggi, usa closest_to_today della sezione target.\n"
-        . "Se il docente chiede la data più lontana da oggi, usa farthest_from_today della sezione target.\n"
-        . "Non scegliere date a intuito: usa sempre le distanze già calcolate dal server.\n\n"
+        . "Usa DATE_CONTEXT_CALCOLATO_DAL_SERVER per tutti i prompt con date, oggi, domani, prossimo, piÃ¹ vicino, piÃ¹ lontano, appelli, scadenze.\n"
+        . "Se il docente chiede la data piÃ¹ vicina a oggi, usa closest_to_today della sezione target.\n"
+        . "Se il docente chiede la data piÃ¹ lontana da oggi, usa farthest_from_today della sezione target.\n"
+        . "Non scegliere date a intuito: usa sempre le distanze giÃ  calcolate dal server.\n\n"
         . "DATA DI OGGI SERVER MOODLE: " . $todayiso . "\n"
-        . "Quando il prompt usa riferimenti temporali come oggi, domani, prossimo, precedente, data più vicina ad oggi, calcola rispetto a DATA DI OGGI SERVER MOODLE.\n"
-        . "Se il docente chiede la data più vicina ad oggi, scegli UNA SOLA data presente nella sezione target: quella con distanza minima dalla data di oggi.\n"
-        . "Se tutte le date sono nel passato, la più vicina ad oggi è la più recente tra quelle passate.\n\n"
+        . "Quando il prompt usa riferimenti temporali come oggi, domani, prossimo, precedente, data piÃ¹ vicina ad oggi, calcola rispetto a DATA DI OGGI SERVER MOODLE.\n"
+        . "Se il docente chiede la data piÃ¹ vicina ad oggi, scegli UNA SOLA data presente nella sezione target: quella con distanza minima dalla data di oggi.\n"
+        . "Se tutte le date sono nel passato, la piÃ¹ vicina ad oggi Ã¨ la piÃ¹ recente tra quelle passate.\n\n"
         . "PROMPT DOCENTE:\n"
         . $teacherprompt . "\n\n"
         . "RISPOSTA JSON OBBLIGATORIA:\n"
@@ -2674,7 +2675,7 @@ function local_aisn_cb_ai_editor_try_handle(int $courseid, string $teacherprompt
     }
 
     if (empty($data['can_handle'])) {
-        $message = trim((string)($data['message'] ?? 'La richiesta non è abbastanza chiara.'));
+        $message = trim((string)($data['message'] ?? 'La richiesta non Ã¨ abbastanza chiara.'));
         return [
             'AI Section Editor: ' . $message,
             'Nessuna modifica applicata.',
@@ -2708,7 +2709,7 @@ function local_aisn_cb_ai_editor_try_handle(int $courseid, string $teacherprompt
     }
 
     return [
-        'AI Section Editor attivo: prompt interpretato dall’AI.',
+        'AI Section Editor attivo: prompt interpretato dallâ€™AI.',
         $message,
         'Sezione aggiornata: "' . (string)$section->name . '".',
         'Nessuna nuova sezione creata.',
@@ -2784,7 +2785,7 @@ function local_aisn_cb_safe_router(int $courseid, int $userid, string $prompt, a
     $conservative = local_aisn_cb_safe_is_conservative($prompt);
 
     if ($oneperfile) {
-        $logs = ['Azione diretta: creo una sezione per ogni file perché richiesto esplicitamente.'];
+        $logs = ['Azione diretta: creo una sezione per ogni file perchÃ© richiesto esplicitamente.'];
 
         foreach ($files as $file) {
             $filename = clean_param((string)($file['name'] ?? ''), PARAM_FILE);
@@ -2827,10 +2828,228 @@ function local_aisn_cb_safe_router(int $courseid, int $userid, string $prompt, a
     return local_aisn_cb_safe_attach_existing($courseid, $userid, $files);
 }
 
+
+// AISN_DELETE_NEW_SECTIONS_SERVER_FIX_V1
+function local_aisn_cb_prompt_wants_delete_default_sections(string $prompt): bool {
+    $p = local_aisn_cb_low($prompt);
+    $flat = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $p);
+
+    $hasdelete = (bool)preg_match(
+        '/\b(?:elimina|eliminami|cancella|cancellami|rimuovi|rimuovimi|togli|levami|leva|delete|remove)\b/iu',
+        (string)$flat
+    );
+
+    if (!$hasdelete) {
+        return false;
+    }
+
+    $mentionsnewsection =
+        str_contains($p, 'new section') ||
+        str_contains($p, 'new sections') ||
+        str_contains($p, 'nuova sezione') ||
+        str_contains($p, 'nuove sezioni') ||
+        str_contains($p, 'sezioni vuote') ||
+        str_contains($p, 'sezioni di default') ||
+        str_contains($p, 'default section') ||
+        str_contains($p, 'default sections');
+
+    if (!$mentionsnewsection) {
+        return false;
+    }
+
+    return true;
+}
+
+function local_aisn_cb_is_default_new_section(stdClass $section): bool {
+    $sectionnum = (int)($section->section ?? -1);
+
+    if ($sectionnum <= 0) {
+        return false;
+    }
+
+    $name = local_aisn_cb_section_text((string)($section->name ?? ''));
+    $key = local_aisn_cb_section_key($name);
+
+    return $key === ''
+        || in_array($key, [
+            'newsection',
+            'newsections',
+            'nuovasezione',
+            'nuovesezioni',
+            'sezionevuota',
+            'sezionivuote',
+            'defaultsection',
+            'defaultsections',
+        ], true);
+}
+
+function local_aisn_cb_delete_default_new_sections(int $courseid): array {
+    global $DB;
+
+    if (function_exists('local_aisn_prod_course_builder_action_allowed') &&
+        !local_aisn_prod_course_builder_action_allowed('delete_section')) {
+        return [
+            'Azione diretta bloccata dalle impostazioni di sicurezza: delete_section.',
+            'Per abilitarla in un ambiente di test attiva allowdestructivecoursebuilder.',
+        ];
+    }
+
+    $sections = $DB->get_records_select(
+        'course_sections',
+        'course = ? AND section > 0',
+        [$courseid],
+        'section DESC',
+        'id, course, section, name, summary, sequence, visible'
+    );
+
+    $deleted = 0;
+    $logs = [];
+
+    foreach ($sections as $section) {
+        if (!local_aisn_cb_is_default_new_section($section)) {
+            continue;
+        }
+
+        $label = trim((string)($section->name ?? ''));
+        if ($label === '') {
+            $label = 'New section #' . (int)$section->section;
+        }
+
+        try {
+            $status = local_aisn_cb_delete_section($courseid, $section);
+            $logs[] = 'Azione diretta: sezione predefinita "' . $label . '" ' . $status . '.';
+            $deleted++;
+        } catch (Throwable $e) {
+            $logs[] = 'Errore cancellazione sezione "' . $label . '": ' . $e->getMessage();
+        }
+    }
+
+    rebuild_course_cache($courseid, true);
+    local_aisn_cb_sync_resources($courseid);
+
+    if ($deleted === 0) {
+        return [
+            'Azione diretta: nessuna sezione "New section" / vuota trovata da cancellare.',
+        ];
+    }
+
+    array_unshift($logs, 'Azione diretta: eliminate ' . $deleted . ' sezioni predefinite "New section".');
+    return $logs;
+}
+
 // AISN_CB_SAFE_ROUTER_PATCH
+
+// AISN_DELETE_NEW_SECTIONS_SERVER_FIX_V2
+function local_aisn_cb_prompt_wants_delete_default_sections_v2(string $prompt): bool {
+    $p = local_aisn_cb_low($prompt);
+
+    $hasdelete = (bool)preg_match(
+        '/\b(?:elimina|eliminami|cancella|cancellami|rimuovi|rimuovimi|togli|levami|leva|delete|remove)\b/iu',
+        $p
+    );
+
+    if (!$hasdelete) {
+        return false;
+    }
+
+    return str_contains($p, 'new section')
+        || str_contains($p, 'new sections')
+        || str_contains($p, 'nuova sezione')
+        || str_contains($p, 'nuove sezioni')
+        || str_contains($p, 'sezioni vuote')
+        || str_contains($p, 'sezioni di default')
+        || str_contains($p, 'default section')
+        || str_contains($p, 'default sections');
+}
+
+function local_aisn_cb_is_default_new_section_v2(stdClass $section): bool {
+    $sectionnum = (int)($section->section ?? -1);
+
+    if ($sectionnum <= 0) {
+        return false;
+    }
+
+    $name = local_aisn_cb_section_text((string)($section->name ?? ''));
+    $key = local_aisn_cb_section_key($name);
+
+    return $key === ''
+        || in_array($key, [
+            'newsection',
+            'newsections',
+            'nuovasezione',
+            'nuovesezioni',
+            'sezionevuota',
+            'sezionivuote',
+            'defaultsection',
+            'defaultsections',
+        ], true);
+}
+
+function local_aisn_cb_delete_default_new_sections_v2(int $courseid): array {
+    global $DB;
+
+    if (function_exists('local_aisn_prod_course_builder_action_allowed') &&
+        !local_aisn_prod_course_builder_action_allowed('delete_section')) {
+        return [
+            'Azione bloccata dalle impostazioni di sicurezza: delete_section.',
+            'Per abilitarla in un corso di test attiva allowdestructivecoursebuilder.',
+        ];
+    }
+
+    $sections = $DB->get_records_select(
+        'course_sections',
+        'course = ? AND section > 0',
+        [$courseid],
+        'section DESC',
+        'id, course, section, name, summary, sequence, visible'
+    );
+
+    $deleted = 0;
+    $logs = [];
+
+    foreach ($sections as $section) {
+        if (!local_aisn_cb_is_default_new_section_v2($section)) {
+            continue;
+        }
+
+        $label = trim((string)($section->name ?? ''));
+        if ($label === '') {
+            $label = 'New section #' . (int)$section->section;
+        }
+
+        try {
+            $status = local_aisn_cb_delete_section($courseid, $section);
+            $logs[] = 'Sezione predefinita "' . $label . '" ' . $status . '.';
+            $deleted++;
+        } catch (Throwable $e) {
+            $logs[] = 'Errore cancellazione sezione "' . $label . '": ' . $e->getMessage();
+        }
+    }
+
+    rebuild_course_cache($courseid, true);
+    local_aisn_cb_sync_resources($courseid);
+
+    if ($deleted === 0) {
+        return [
+            'Nessuna sezione "New section" o vuota trovata da cancellare.',
+        ];
+    }
+
+    array_unshift($logs, 'Azione diretta: eliminate ' . $deleted . ' sezioni predefinite "New section".');
+    return $logs;
+}
+
 function local_aisn_cb_execute_direct(int $courseid, int $userid, string $prompt, array $files): array {
     $logs = [];
     $promptlow = local_aisn_cb_low($prompt);
+    // AISN_DELETE_NEW_SECTIONS_ROUTER_V2
+    if (
+        function_exists('local_aisn_cb_prompt_wants_delete_default_sections_v2') &&
+        local_aisn_cb_prompt_wants_delete_default_sections_v2($prompt)
+    ) {
+        return local_aisn_cb_delete_default_new_sections_v2($courseid);
+    }
+
     $safehandled = local_aisn_cb_safe_router($courseid, $userid, $prompt, $files);
 
     if ($safehandled !== null) {
@@ -2884,7 +3103,13 @@ function local_aisn_cb_execute_direct(int $courseid, int $userid, string $prompt
         return $logs;
     }
 
-    if (preg_match('/rinomina\s+(?:la\s+)?sezione\s+["“”\'«»]?([^"“”\'«»]+)["“”\'«»]?\s+(?:in|come|a)\s+["“”\'«»]?([^"“”\'«»\r\n]+)["“”\'«»]?/iu', $prompt, $m)) {
+    if (preg_match('/rinomina\s+(?:la\s+)?sezione\s+["â€œâ€\'Â«Â»]?([^"â€œâ€\'Â«Â»]+)["â€œâ€\'Â«Â»]?\s+(?:in|come|a)\s+["â€œâ€\'Â«Â»]?([^"â€œâ€\'Â«Â»\r\n]+)["â€œâ€\'Â«Â»]?/iu', $prompt, $m)) {
+        // AISN_PS1_DIRECT_RENAME_GUARD
+        if (function_exists('local_aisn_prod_course_builder_action_allowed') &&
+            !local_aisn_prod_course_builder_action_allowed('rename_section')) {
+            return ['Azione diretta bloccata dalle impostazioni di sicurezza: rename_section.'];
+        }
+
         $old = local_aisn_cb_section_text((string)$m[1]);
 
         $newraw = (string)$m[2];
@@ -2947,7 +3172,7 @@ function local_aisn_cb_execute_direct(int $courseid, int $userid, string $prompt
             $logs[] = 'Azione diretta: uso sezione esistente "' . (string)$section->name . '".';
             $logs = array_merge($logs, local_aisn_cb_attach_files_to_section($courseid, $userid, $section, $files));
             local_aisn_cb_sync_resources($courseid);
-            $logs[] = 'RAG sync saltato in modalità demo veloce.';
+            $logs[] = 'RAG sync saltato in modalitÃ  demo veloce.';
 
             return $logs;
         }
@@ -2964,7 +3189,7 @@ function local_aisn_cb_execute_direct(int $courseid, int $userid, string $prompt
             $logs[] = 'Azione diretta: uso sezione "' . (string)$section->name . '".';
             $logs = array_merge($logs, local_aisn_cb_attach_files_to_section($courseid, $userid, $section, $files));
             local_aisn_cb_sync_resources($courseid);
-            $logs[] = 'RAG sync saltato in modalità demo veloce.';
+            $logs[] = 'RAG sync saltato in modalitÃ  demo veloce.';
 
             return $logs;
         }
@@ -2974,7 +3199,7 @@ function local_aisn_cb_execute_direct(int $courseid, int $userid, string $prompt
             $logs[] = 'Azione diretta: uso sezione "' . (string)$section->name . '".';
             $logs = array_merge($logs, local_aisn_cb_attach_files_to_section($courseid, $userid, $section, $files));
             local_aisn_cb_sync_resources($courseid);
-            $logs[] = 'RAG sync saltato in modalità demo veloce.';
+            $logs[] = 'RAG sync saltato in modalitÃ  demo veloce.';
 
             return $logs;
         }
@@ -2984,7 +3209,7 @@ function local_aisn_cb_execute_direct(int $courseid, int $userid, string $prompt
             $logs[] = 'Azione diretta: uso sezione "' . (string)$section->name . '".';
             $logs = array_merge($logs, local_aisn_cb_attach_files_to_section($courseid, $userid, $section, $files));
             local_aisn_cb_sync_resources($courseid);
-            $logs[] = 'RAG sync saltato in modalità demo veloce.';
+            $logs[] = 'RAG sync saltato in modalitÃ  demo veloce.';
 
             return $logs;
         }
@@ -3007,7 +3232,7 @@ function local_aisn_cb_execute_direct(int $courseid, int $userid, string $prompt
             }
 
             local_aisn_cb_sync_resources($courseid);
-            $logs[] = 'RAG sync saltato in modalità demo veloce.';
+            $logs[] = 'RAG sync saltato in modalitÃ  demo veloce.';
 
             return $logs;
         }
@@ -3099,8 +3324,8 @@ function local_aisn_cb_ai_datefacts_context(array $sections): array {
         'meaning' => [
             'closest_to_today' => 'data con distanza assoluta minima da oggi',
             'farthest_from_today' => 'data con distanza assoluta massima da oggi',
-            'if_all_dates_are_past_closest' => 'la più vicina a oggi è la più recente tra quelle passate',
-            'if_all_dates_are_past_farthest' => 'la più lontana da oggi è la più vecchia tra quelle passate',
+            'if_all_dates_are_past_closest' => 'la piÃ¹ vicina a oggi Ã¨ la piÃ¹ recente tra quelle passate',
+            'if_all_dates_are_past_farthest' => 'la piÃ¹ lontana da oggi Ã¨ la piÃ¹ vecchia tra quelle passate',
         ],
         'sections' => [],
     ];
@@ -3397,11 +3622,11 @@ function local_aisn_cb_ai_plan_actions(int $courseid, string $teacherprompt, arr
 
         . "REGOLE SEMANTICHE OBBLIGATORIE:\n"
         . "- Se il prompt parla di un materiale/file/risorsa/pdf/ppt/slide/documento, guarda PRIMA MATERIALI/RISORSE REALI DEL CORSO.\n"
-        . "- Se il docente scrive male il nome, usa il materiale semanticamente più vicino nel catalogo.\n"
+        . "- Se il docente scrive male il nome, usa il materiale semanticamente piÃ¹ vicino nel catalogo.\n"
         . "- Esempio: se scrive 'tabellozza' e nel catalogo esiste 'tabella ascii.pdf', considera 'tabellozza' un riferimento probabile a quel PDF.\n"
-        . "- Se il docente dice 'elimina/togli/rimuovi X dalla sezione Y' e X è simile a un materiale nel catalogo, usa delete_material, NON update_section_html.\n"
+        . "- Se il docente dice 'elimina/togli/rimuovi X dalla sezione Y' e X Ã¨ simile a un materiale nel catalogo, usa delete_material, NON update_section_html.\n"
         . "- Se scegli un materiale dal catalogo, copia SEMPRE cmid e title esatti dal catalogo.\n"
-        . "- Se più materiali sono plausibili nella stessa sezione, scegli quello più semanticamente vicino al prompt.\n"
+        . "- Se piÃ¹ materiali sono plausibili nella stessa sezione, scegli quello piÃ¹ semanticamente vicino al prompt.\n"
         . "- Se il prompt riguarda testo/date/colori della sezione e NON un materiale, allora usa update_section_html.\n"
         . "- Non creare sezioni se il docente chiede solo di modificare/eliminare un materiale in una sezione esistente.\n"
         . "- Non inventare nomi di file: usa solo titoli presenti nel catalogo o file caricati nel form.\n\n"
@@ -4000,7 +4225,7 @@ function local_aisn_cb_ai_set_material_visibility(int $courseid, string $section
         return 'materiale "' . (string)$cm->title . '" ' . ($visible ? 'reso visibile' : 'nascosto');
     } catch (Throwable $e) {
         debugging('AI Course Builder material visibility failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
-        return 'errore visibilità materiale: ' . $e->getMessage();
+        return 'errore visibilitÃ  materiale: ' . $e->getMessage();
     }
 }
 
@@ -4037,6 +4262,13 @@ function local_aisn_cb_execute_ai_actions(int $courseid, int $userid, array $act
         }
 
         $type = local_aisn_cb_low((string)($a['action'] ?? ''));
+
+        // AISN_PS1_DESTRUCTIVE_ACTION_GUARD
+        if (function_exists('local_aisn_prod_course_builder_action_allowed') &&
+            !local_aisn_prod_course_builder_action_allowed($type)) {
+            $logs[] = 'AI: azione bloccata dalle impostazioni di sicurezza: ' . $type . '.';
+            continue;
+        }
 
         if ($type === 'delete_all_sections') {
             $logs = array_merge($logs, local_aisn_cb_delete_all_sections($courseid));
@@ -4177,20 +4409,6 @@ function local_aisn_cb_execute_ai_actions(int $courseid, int $userid, array $act
 
             continue;
         }
-
-        // AISN_AI_DELETE_MATERIAL_EXECUTOR_V1
-        if ($type === 'delete_material') {
-            $sectiontarget = (string)($a['target'] ?? '');
-            $materialname = (string)($a['material'] ?? $a['file'] ?? $a['filename'] ?? $a['name'] ?? '');
-
-            if (trim($materialname) === '') {
-                $logs[] = 'AI: delete_material senza nome materiale.';
-                continue;
-            }
-
-            $logs[] = 'AI: ' . local_aisn_cb_ai_delete_material($courseid, $sectiontarget, $materialname);
-            continue;
-        }
         // AISN_AI_MATERIAL_ACTIONS_FULL_EXECUTOR_V1
         if ($type === 'delete_material') {
             $sectiontarget = (string)($a['target'] ?? $a['section'] ?? '');
@@ -4243,7 +4461,7 @@ function local_aisn_cb_execute_ai_actions(int $courseid, int $userid, array $act
             }
 
             if (trim($materialname) === '') {
-                $logs[] = 'AI: visibilità materiale senza nome materiale.';
+                $logs[] = 'AI: visibilitÃ  materiale senza nome materiale.';
                 continue;
             }
 
@@ -4295,7 +4513,7 @@ function local_aisn_cb_execute_prompt(int $courseid, int $userid, string $prompt
 
     if (!empty($actions)) {
         return array_merge(
-            ['AI planner FIRST: prompt interpretato dall’AI con catalogo reale di sezioni e materiali.'],
+            ['AI planner FIRST: prompt interpretato dallâ€™AI con catalogo reale di sezioni e materiali.'],
             local_aisn_cb_execute_ai_actions($courseid, $userid, $actions, $files)
         );
     }
@@ -4304,7 +4522,7 @@ function local_aisn_cb_execute_prompt(int $courseid, int $userid, string $prompt
 
     if (!empty($direct)) {
         return array_merge(
-            ['Fallback locale usato perché l’AI non ha restituito azioni valide.'],
+            ['Fallback locale usato perchÃ© lâ€™AI non ha restituito azioni valide.'],
             $direct
         );
     }
@@ -4408,7 +4626,7 @@ echo html_writer::tag('strong', 'Esempi validi:');
 echo html_writer::tag('pre',
 'Crea sezione "Exams" con questo testo: ...
 Metti tutti i file caricati nella sezione "Lecture 02 - Business Intelligence e Big Data"
-Inserisci i file caricati nelle sezioni già create in base al nome del file. Non creare nuove sezioni.
+Inserisci i file caricati nelle sezioni giÃ  create in base al nome del file. Non creare nuove sezioni.
 Togli la sezione "simulazione"
 Rinomina sezione "HTML base" in "HTML e CSS base"'
 );
@@ -4422,7 +4640,7 @@ echo html_writer::start_tag('form', [
 
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => 'build']);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'MAX_FILE_SIZE', 'value' => 512 * 1024 * 1024]);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'MAX_FILE_SIZE', 'value' => local_aisn_upload_max_bytes()]);
 
 echo html_writer::tag('label', 'Prompt docente', ['for' => 'prompt']);
 echo html_writer::tag('textarea', s($prompt), [
@@ -4462,3 +4680,5 @@ if (function_exists('local_aisn_back_to_course_autofix')) {
 }
 
 echo $OUTPUT->footer();
+
+
