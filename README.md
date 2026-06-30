@@ -34,6 +34,20 @@ Administrators can enable optional external services from the plugin settings.
 - AI Course Builder with production safety gates.
 - Simulator Finder and saved simulation activities.
 
+## Technical documentation
+
+Additional technical documentation is available in the [`docs/`](docs/) directory.
+
+The documentation includes architectural notes, design patterns, quality goals, manual verification steps and future development directions:
+
+- [`architecture-overview.md`](docs/architecture-overview.md): overview of the main architecture and component organization.
+- [`design-patterns.md`](docs/design-patterns.md): description of the design patterns used in the AI service layer.
+- [`solid-principles.md`](docs/solid-principles.md): relation between the project structure and SOLID principles.
+- [`quality-goals.md`](docs/quality-goals.md): summary of the main quality goals, including maintainability, extensibility and robustness.
+- [`manual-test-checklist.md`](docs/manual-test-checklist.md): manual checklist for verifying the main prototype workflows.
+- [`ROADMAP.md`](docs/ROADMAP.md): possible future improvements and development directions.
+- [`RELEASE_NOTES.md`](docs/RELEASE_NOTES.md): notes about releases and relevant project updates.
+
 ## Installation
 
 Install the local plugin in:
