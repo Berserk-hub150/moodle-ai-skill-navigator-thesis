@@ -1,11 +1,28 @@
 # AI Skill Navigator
 
+> [!NOTE]
+> **Thesis repository / academic snapshot**
+>
+> This repository preserves the version of **AI Skill Navigator** developed as part of my Bachelor's thesis in Computer Science at the University of Camerino.
+>
+> Development continued after the thesis. For the **current version, latest fixes, releases and documentation**, use the main project repository:
+>
+> ### [➡️ AI Skill Navigator — current development repository](https://github.com/Berserk-hub150/moodle-ai-skill-navigator)
+
 AI Skill Navigator is a Moodle plugin suite that adds course-aware AI learning tools for students and teachers.
 
 The package contains:
 
 - `local_aiskillnavigator`: the main local plugin with AI tutor, quiz generation, mind maps, assessments, material/RAG tools, learning-gap analysis, simulator suggestions and course-building helpers.
 - `block_aiskillnavigator`: an optional course block that links users to the tools available for their role.
+
+## Project evolution
+
+This repository documents the academic stage of AI Skill Navigator and keeps the thesis-related implementation available as a reference.
+
+After the thesis, the project continued to evolve as an open-source Moodle project, including further work on reliability, Moodle integration, testing, deployment and documentation.
+
+**Latest development:** [github.com/Berserk-hub150/moodle-ai-skill-navigator](https://github.com/Berserk-hub150/moodle-ai-skill-navigator)
 
 ## Production defaults
 
